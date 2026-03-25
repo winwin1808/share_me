@@ -1,0 +1,69 @@
+{
+  "radius": {
+    "xs": 8,
+    "sm": 10,
+    "md": 12,
+    "lg": 16,
+    "xl": 20,
+    "2xl": 24,
+    "pill": 999
+  },
+  "space": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48
+  },
+  "color": {
+    "neutral": {
+      "0": "#05070b",
+      "1": "#0a0f18",
+      "2": "#111927",
+      "3": "#1a2434",
+      "4": "#6f7c91",
+      "5": "#edf2f7"
+    },
+    "accent": {
+      "info": "#63d4ff",
+      "success": "#49d17d",
+      "warning": "#f0b84b",
+      "danger": "#ef6b6b",
+      "violet": "#a78bfa"
+    }
+  },
+  "semantic": {
+    "bg": {
+      "app": "{color.neutral.0}",
+      "surface": "{color.neutral.1}",
+      "surfaceElevated": "{color.neutral.2}",
+      "overlay": "rgba(5, 7, 11, 0.72)"
+    },
+    "border": {
+      "default": "rgba(255, 255, 255, 0.08)",
+      "focus": "{color.accent.info}"
+    },
+    "text": {
+      "primary": "{color.neutral.5}",
+      "secondary": "rgba(237, 242, 247, 0.76)",
+      "muted": "{color.neutral.4}",
+      "inverse": "{color.neutral.0}"
+    },
+    "state": {
+      "info": "{color.accent.info}",
+      "success": "{color.accent.success}",
+      "warning": "{color.accent.warning}",
+      "error": "{color.accent.danger}"
+    }
+  },
+  "motion": {
+    "fast": 120,
+    "normal": 180,
+    "slow": 240,
+    "curve": "cubic-bezier(0.2, 0, 0, 1)"
+  }
+}

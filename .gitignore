@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-electron
+release
+artifacts
+coverage
+.DS_Store
+*.log
+*.tsbuildinfo
+

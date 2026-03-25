@@ -1,0 +1,64 @@
+{
+  "name": "cursorful-electron-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron MVP for browser-first screen recording with editable zooms and offline export.",
+  "main": "dist-electron/main/main.js",
+  "author": "bssgroup",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"npm:dev:electron\"",
+    "dev:electron": "wait-on tcp:5173 dist-electron/main/main.js && electron .",
+    "build": "npm run build:renderer && npm run build:main",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
+    "test": "vitest run",
+    "ci:build": "npm run typecheck && npm run test && npm run build",
+    "package:mac": "npm run build && electron-builder --mac dmg zip --publish never",
+    "package:dir": "npm run build && electron-builder --dir --publish never"
+  },
+  "build": {
+    "appId": "com.bssgroup.cursorful.mvp",
+    "productName": "Cursorful Desktop MVP",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "hardenedRuntime": false
+    }
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.2.0",
+    "@types/node": "^24.5.2",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.6",
+    "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^9.2.1",
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4",
+    "wait-on": "^8.0.3"
+  }
+}
+
