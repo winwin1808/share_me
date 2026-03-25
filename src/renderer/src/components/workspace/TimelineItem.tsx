@@ -24,6 +24,7 @@ export function TimelineItem({
       type="button"
       variant={active ? "solid" : "ghost"}
       className="timeline-item"
+      aria-current={active ? "true" : undefined}
       onClick={() => onSelect(id)}
     >
       <span>{Math.round(startMs)}ms</span>
@@ -34,4 +35,3 @@ export function TimelineItem({
     </Button>
   );
 }
-

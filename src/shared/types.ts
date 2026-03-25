@@ -72,6 +72,7 @@ export interface ProjectFileV1 {
   name: string;
   createdAt: string;
   updatedAt: string;
+  storagePath?: string;
   recording?: RecordingSession;
   zoomSegments: ZoomSegment[];
   cursorPath: CursorPoint[];
@@ -87,6 +88,8 @@ export interface SystemInfo {
   electronVersion: string;
   ffmpegAvailable: boolean;
   signingConfigured: boolean;
+  projectsRootDir: string;
+  recordingsRootDir: string;
 }
 
 export interface ExportRequest {
@@ -99,4 +102,3 @@ export interface SavedRecordingPayload {
   data: ArrayBuffer;
   session: RecordingSession;
 }
-

@@ -54,6 +54,14 @@ textarea {
   font: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.72);
+  outline-offset: 2px;
+}
+
 button,
 .ui-field {
   border: 1px solid var(--border);
@@ -114,6 +122,11 @@ button:disabled {
 .ui-field {
   width: 100%;
   padding: 0.8rem 0.95rem;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
 }
 
 .ui-textarea {
@@ -208,6 +221,11 @@ button:disabled {
 .workspace-banner,
 .workspace-stats,
 .export-progress,
+.timeline-rail-actions,
+.playback-actions,
+.playback-bar,
+.playback-scrubber,
+.preview-overlay-stack,
 .preview-overlay {
   display: flex;
   align-items: center;
@@ -386,9 +404,6 @@ button:disabled {
 }
 
 .preview-overlay {
-  position: absolute;
-  right: 1rem;
-  bottom: 1rem;
   padding: 0.7rem 0.85rem;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -396,10 +411,24 @@ button:disabled {
   backdrop-filter: blur(12px);
 }
 
+.preview-overlay-stack {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  display: grid;
+  gap: 0.45rem;
+  z-index: 1;
+  align-items: start;
+}
+
 .timeline-rail-list {
   display: grid;
   gap: 0.6rem;
   margin-top: 0.8rem;
+}
+
+.timeline-rail-actions {
+  gap: 0.45rem;
 }
 
 .timeline-item {
@@ -431,6 +460,12 @@ button:disabled {
   color: var(--muted);
 }
 
+.panel-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
 .checkbox-field {
   display: flex;
   align-items: center;
@@ -446,6 +481,37 @@ button:disabled {
 .empty-state,
 .system-summary {
   margin: 0;
+}
+
+.playback-bar {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.playback-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.playback-scrubber {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.playback-time {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.preview-empty {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.preview-empty .empty-state-card {
+  max-width: 420px;
 }
 
 .export-grid {
@@ -501,5 +567,14 @@ button:disabled {
   .workspace-stats {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .playback-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-overlay-stack {
+    left: 1rem;
+    right: 1rem;
   }
 }

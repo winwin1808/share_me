@@ -14,14 +14,29 @@ export interface TimelineItem {
 export function TimelineRail({
   items,
   activeId,
+  playheadMs,
+  durationMs,
   onSelect
 }: {
   items: TimelineItem[];
   activeId: string | null;
+  playheadMs: number;
+  durationMs: number;
   onSelect: (id: string) => void;
 }) {
   return (
-    <Panel eyebrow="Editing" title="Zoom timeline" actions={<Badge tone="neutral">{items.length} items</Badge>}>
+    <Panel
+      eyebrow="Editing"
+      title="Zoom timeline"
+      actions={
+        <div className="timeline-rail-actions">
+          <Badge tone="neutral">{items.length} items</Badge>
+          <Badge tone="accent">
+            {Math.round(playheadMs)} / {Math.round(durationMs)} ms
+          </Badge>
+        </div>
+      }
+    >
       <div className="timeline-rail-list">
         {items.length === 0 && <EmptyState title="No zooms yet." description="Click the preview to create your first focus change." />}
         {items.map((item) => (

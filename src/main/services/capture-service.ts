@@ -1,4 +1,4 @@
-import { desktopCapturer, nativeImage } from "electron";
+import { desktopCapturer } from "electron";
 import type { CaptureSource } from "../../shared/types";
 
 function inferSourceType(name: string): CaptureSource["sourceType"] {
@@ -39,4 +39,3 @@ export class ElectronDesktopCaptureAdapter implements CaptureAdapter {
     return image.toDataURL();
   }
 }
-

@@ -1,4 +1,4 @@
-import type { ZoomSegment } from "../../../../shared/types";
+import type { ZoomSegment } from "@shared/types";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Button } from "../ui/Button";
 import { FieldShell, SelectField, TextField } from "../ui/Field";
