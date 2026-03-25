@@ -1,5 +1,6 @@
 import { Button } from "../ui/Button";
 import { FieldShell, SelectField } from "../ui/Field";
+import { Icon } from "../ui/Icon";
 import { Panel } from "../ui/Panel";
 import { StatusBadge } from "../ui/StatusBadge";
 
@@ -25,7 +26,7 @@ export function LookPanel({
           <option value="sunset">Sunset</option>
         </SelectField>
       </FieldShell>
-      <Button type="button" variant="soft" onClick={onPickBackgroundImage}>
+      <Button type="button" variant="soft" leading={<Icon name="background" />} onClick={onPickBackgroundImage}>
         Pick custom background
       </Button>
       <label className="checkbox-field">

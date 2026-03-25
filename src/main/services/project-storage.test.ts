@@ -53,6 +53,7 @@ describe("project storage", () => {
         name: "Project",
         createdAt: "2024-01-01T00:00:00.000Z",
         updatedAt: "2024-01-01T00:00:00.000Z",
+        captureSetup: { frameAspectRatio: "16:9" },
         storagePath: "/tmp/project.cursorful.json",
         zoomSegments: [],
         cursorPath: [],
@@ -70,6 +71,7 @@ describe("project storage", () => {
       name: "Project",
       createdAt: "2024-01-01T00:00:00.000Z",
       updatedAt: "2024-01-01T00:00:00.000Z",
+      captureSetup: { frameAspectRatio: "16:9" },
       zoomSegments: [],
       cursorPath: [],
       exportPresets: [],
@@ -98,6 +100,7 @@ describe("project storage", () => {
         name: "Project",
         createdAt: "2024-01-01T00:00:00.000Z",
         updatedAt: "2024-01-02T00:00:00.000Z",
+        captureSetup: { frameAspectRatio: "9:16", cropRegion: { x: 0.1, y: 0.2, width: 0.7, height: 0.6 } },
         zoomSegments: [],
         cursorPath: [],
         exportPresets: [],
@@ -111,6 +114,7 @@ describe("project storage", () => {
     expect(readFileMock).toHaveBeenCalledWith("/tmp/project.cursorful.json", "utf8");
     expect(project.storagePath).toBe("/tmp/project.cursorful.json");
     expect(project.id).toBe("project-1");
+    expect(project.captureSetup).toEqual({ frameAspectRatio: "9:16", cropRegion: { x: 0.1, y: 0.2, width: 0.7, height: 0.6 } });
   });
 
   it("rejects invalid project JSON with a helpful message", async () => {

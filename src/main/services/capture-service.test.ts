@@ -37,6 +37,12 @@ describe("ElectronDesktopCaptureAdapter", () => {
         name: "Tab: Docs",
         display_id: undefined,
         thumbnail: { isEmpty: () => false, toDataURL: () => "data:image/png;base64,thumb3" }
+      },
+      {
+        id: "4",
+        name: "Screen 1",
+        display_id: "display-3",
+        thumbnail: { isEmpty: () => false, toDataURL: () => "data:image/png;base64,thumb4" }
       }
     ]);
 
@@ -47,23 +53,30 @@ describe("ElectronDesktopCaptureAdapter", () => {
       {
         id: "1",
         name: "Chrome - Cursorful",
-        sourceType: "browser-window",
+        sourceType: "window",
         displayId: "display-1",
         thumbnailDataUrl: "data:image/png;base64,thumb1"
       },
       {
         id: "2",
         name: "Finder",
-        sourceType: "desktop-window",
+        sourceType: "window",
         displayId: "display-2",
         thumbnailDataUrl: undefined
       },
       {
         id: "3",
         name: "Tab: Docs",
-        sourceType: "browser-tab",
+        sourceType: "tab",
         displayId: undefined,
         thumbnailDataUrl: "data:image/png;base64,thumb3"
+      },
+      {
+        id: "4",
+        name: "Screen 1",
+        sourceType: "screen",
+        displayId: "display-3",
+        thumbnailDataUrl: "data:image/png;base64,thumb4"
       }
     ]);
   });

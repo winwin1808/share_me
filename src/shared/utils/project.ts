@@ -1,4 +1,11 @@
-import type { ExportPreset, ProjectFileV1, RecordingSession } from "../types";
+import type {
+  CaptureSetup,
+  ExportPreset,
+  FrameAspectRatio,
+  ProjectFileV1,
+  RecordingSession,
+  CaptureSourceType
+} from "../types";
 
 export const DEFAULT_EXPORT_PRESETS: ExportPreset[] = [
   {
@@ -30,6 +37,9 @@ export function createProject(name = "Untitled Project"): ProjectFileV1 {
     createdAt: now,
     updatedAt: now,
     storagePath: undefined,
+    captureSetup: {
+      frameAspectRatio: "16:9"
+    },
     zoomSegments: [],
     cursorPath: [],
     exportPresets: DEFAULT_EXPORT_PRESETS,
@@ -43,6 +53,7 @@ export function ensureProjectShape(project: ProjectFileV1): ProjectFileV1 {
     ...project,
     version: 1,
     storagePath: project.storagePath,
+    captureSetup: normalizeCaptureSetup(project.captureSetup) ?? { frameAspectRatio: "16:9" },
     zoomSegments: project.zoomSegments ?? [],
     cursorPath: project.cursorPath ?? [],
     exportPresets: project.exportPresets?.length ? project.exportPresets : DEFAULT_EXPORT_PRESETS,
@@ -53,6 +64,69 @@ export function ensureProjectShape(project: ProjectFileV1): ProjectFileV1 {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function normalizeCaptureSourceType(value: unknown): CaptureSourceType | undefined {
+  if (value === "tab" || value === "window" || value === "screen") {
+    return value;
+  }
+  if (value === "browser-tab") {
+    return "tab";
+  }
+  if (value === "browser-window") {
+    return "window";
+  }
+  if (value === "desktop-window") {
+    return "screen";
+  }
+  return undefined;
+}
+
+function normalizeFrameAspectRatio(value: unknown): FrameAspectRatio {
+  return value === "native" || value === "9:16" || value === "1:1" ? value : "16:9";
+}
+
+function normalizeCaptureSetup(value: unknown): CaptureSetup | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (!("frameAspectRatio" in value) && !("cropRegion" in value) && !("sourceId" in value) && !("sourceType" in value)) {
+    return undefined;
+  }
+
+  const cropCandidate = value.cropRegion;
+  const cropRegion =
+    isRecord(cropCandidate) &&
+    typeof cropCandidate.x === "number" &&
+    typeof cropCandidate.y === "number" &&
+    typeof cropCandidate.width === "number" &&
+    typeof cropCandidate.height === "number"
+      ? {
+          x: cropCandidate.x,
+          y: cropCandidate.y,
+          width: cropCandidate.width,
+          height: cropCandidate.height
+        }
+      : undefined;
+
+  const captureSetup: CaptureSetup = {
+    frameAspectRatio: normalizeFrameAspectRatio(value.frameAspectRatio)
+  };
+  if (typeof value.sourceId === "string" && value.sourceId) {
+    captureSetup.sourceId = value.sourceId;
+  }
+  const sourceType = normalizeCaptureSourceType(value.sourceType);
+  if (sourceType) {
+    captureSetup.sourceType = sourceType;
+  }
+  if (typeof value.sourceName === "string" && value.sourceName) {
+    captureSetup.sourceName = value.sourceName;
+  }
+  if (cropRegion) {
+    captureSetup.cropRegion = cropRegion;
+  }
+  return captureSetup;
 }
 
 function normalizeRecordingSession(value: unknown): RecordingSession | undefined {
@@ -79,7 +153,7 @@ function normalizeRecordingSession(value: unknown): RecordingSession | undefined
   return {
     id: String(value.id),
     sourceId: String(value.sourceId),
-    sourceType: value.sourceType === "browser-tab" || value.sourceType === "desktop-window" ? value.sourceType : "browser-window",
+    sourceType: normalizeCaptureSourceType(value.sourceType) ?? "window",
     sourceName: String(value.sourceName),
     startedAt: String(value.startedAt),
     endedAt: typeof value.endedAt === "string" ? value.endedAt : undefined,
@@ -88,6 +162,22 @@ function normalizeRecordingSession(value: unknown): RecordingSession | undefined
     width: Number(value.width),
     height: Number(value.height),
     audioEnabled: Boolean(value.audioEnabled),
+    captureSetup: normalizeCaptureSetup(value.captureSetup),
+    sourceBounds:
+      isRecord(value.sourceBounds) && typeof value.sourceBounds.width === "number" && typeof value.sourceBounds.height === "number"
+        ? { width: value.sourceBounds.width, height: value.sourceBounds.height }
+        : undefined,
+    frameBounds:
+      isRecord(value.frameBounds) && typeof value.frameBounds.width === "number" && typeof value.frameBounds.height === "number"
+        ? { width: value.frameBounds.width, height: value.frameBounds.height }
+        : undefined,
+    permissionStatus:
+      value.permissionStatus === "granted" ||
+      value.permissionStatus === "denied" ||
+      value.permissionStatus === "restricted"
+        ? value.permissionStatus
+        : "unknown",
+    sourceStatus: value.sourceStatus === "available" || value.sourceStatus === "unavailable" ? value.sourceStatus : "unknown",
     videoPath: typeof value.videoPath === "string" && value.videoPath ? value.videoPath : undefined
   };
 }
@@ -130,6 +220,7 @@ export function normalizeProjectFile(value: unknown): ProjectFileV1 {
     createdAt,
     updatedAt,
     storagePath: typeof value.storagePath === "string" && value.storagePath ? value.storagePath : undefined,
+    captureSetup: normalizeCaptureSetup(value.captureSetup),
     recording: normalizeRecordingSession(value.recording),
     zoomSegments: Array.isArray(value.zoomSegments) ? (value.zoomSegments as ProjectFileV1["zoomSegments"]) : [],
     cursorPath: Array.isArray(value.cursorPath) ? (value.cursorPath as ProjectFileV1["cursorPath"]) : [],

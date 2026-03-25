@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent } from "react";
-import type { CaptureSource, ExportJob, ExportPreset, ProjectFileV1, RecordingSession, ZoomSegment } from "@shared/types";
+import type { MouseEvent, PointerEvent } from "react";
+import type {
+  CaptureCropRegion,
+  CaptureSource,
+  ExportJob,
+  ExportPreset,
+  FrameAspectRatio,
+  ProjectFileV1,
+  RecordingSession,
+  ZoomSegment
+} from "@shared/types";
 import { createProject } from "@shared/utils/project";
 import { createZoomSegment, getActiveZoom, updateSegment } from "@shared/utils/zoom";
 
@@ -8,6 +17,7 @@ type RecorderState = "idle" | "recording" | "stopped";
 type SourceState = "loading" | "ready" | "error";
 type PreviewState = "idle" | "live" | "playing" | "paused";
 type SaveState = "idle" | "saving" | "saved" | "error";
+type CaptureFrameMode = "fit" | "crop";
 
 const MIN_ZOOM_SCALE = 1;
 const MAX_ZOOM_SCALE = 3;
@@ -43,6 +53,19 @@ function createProjectFocus(project: ProjectFileV1): number {
   return project.zoomSegments[0]?.startMs ?? 0;
 }
 
+function normalizeCropRegion(start: { x: number; y: number }, end: { x: number; y: number }): CaptureCropRegion {
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const width = Math.abs(end.x - start.x);
+  const height = Math.abs(end.y - start.y);
+  return {
+    x,
+    y,
+    width,
+    height
+  };
+}
+
 export function useDesktopStudioController() {
   const [project, setProject] = useState<ProjectFileV1>(() => createProject("Browser Capture MVP"));
   const [sources, setSources] = useState<CaptureSource[]>([]);
@@ -62,6 +85,10 @@ export function useDesktopStudioController() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [systemSummary, setSystemSummary] = useState("Loading system info...");
   const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
+  const [frameAspectRatio, setFrameAspectRatio] = useState<FrameAspectRatio>(project.captureSetup?.frameAspectRatio ?? "16:9");
+  const [captureFrameMode, setCaptureFrameMode] = useState<CaptureFrameMode>("fit");
+  const [cropRegion, setCropRegion] = useState<CaptureCropRegion | null>(project.captureSetup?.cropRegion ?? null);
+  const [cropDraftRegion, setCropDraftRegion] = useState<CaptureCropRegion | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -69,6 +96,7 @@ export function useDesktopStudioController() {
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
+  const cropStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const selectedSource = useMemo(
     () => sources.find((source) => source.id === selectedSourceId) ?? null,
@@ -93,6 +121,7 @@ export function useDesktopStudioController() {
     [project.zoomSegments, selectedZoomId]
   );
   const canPreviewPlay = Boolean(previewSourceUrl);
+  const hasCropRegion = Boolean(cropRegion);
 
   useEffect(() => {
     void refreshSources();
@@ -112,6 +141,30 @@ export function useDesktopStudioController() {
   }, []);
 
   useEffect(() => {
+    const unsubscribeTray = window.desktopApi.app.onTrayCommand((command) => {
+      if (command === "record") {
+        if (selectedSourceId) {
+          void startRecording();
+        } else {
+          void refreshSources();
+        }
+        return;
+      }
+      if (command === "select-input") {
+        void refreshSources();
+        return;
+      }
+      if (command === "stop-recording") {
+        stopRecording();
+      }
+    });
+
+    return () => {
+      unsubscribeTray();
+    };
+  }, [selectedSourceId]);
+
+  useEffect(() => {
     return () => {
       if (recordedPreviewUrl) {
         URL.revokeObjectURL(recordedPreviewUrl);
@@ -127,6 +180,20 @@ export function useDesktopStudioController() {
       setSelectedZoomId(null);
     }
   }, [project.zoomSegments, selectedZoomId]);
+
+  useEffect(() => {
+    setProject((current) => ({
+      ...current,
+      captureSetup: {
+        ...current.captureSetup,
+        sourceId: selectedSource?.id ?? current.captureSetup?.sourceId,
+        sourceType: selectedSource?.sourceType ?? current.captureSetup?.sourceType,
+        sourceName: selectedSource?.name ?? current.captureSetup?.sourceName,
+        frameAspectRatio,
+        cropRegion: cropRegion ?? undefined
+      }
+    }));
+  }, [cropRegion, frameAspectRatio, selectedSource]);
 
   async function refreshSources() {
     setSourceState("loading");
@@ -208,6 +275,11 @@ export function useDesktopStudioController() {
     setCaptureError(null);
     setSourceError(null);
     setSelectedZoomId(null);
+    setSelectedSourceId("");
+    setCaptureFrameMode("fit");
+    setFrameAspectRatio("16:9");
+    setCropRegion(null);
+    setCropDraftRegion(null);
   }
 
   async function openProject() {
@@ -221,6 +293,12 @@ export function useDesktopStudioController() {
         setPlayheadMs(createProjectFocus(next));
         setRecordingDurationMs(next.recording?.durationMs ?? 0);
         setPlaybackState(next.recording ? "paused" : "idle");
+        const savedFrameAspectRatio = next.captureSetup?.frameAspectRatio ?? next.recording?.captureSetup?.frameAspectRatio ?? "16:9";
+        const savedCropRegion = next.captureSetup?.cropRegion ?? next.recording?.captureSetup?.cropRegion ?? null;
+        setFrameAspectRatio(savedFrameAspectRatio);
+        setCropRegion(savedCropRegion);
+        setCaptureFrameMode(savedCropRegion ? "crop" : "fit");
+        setSelectedSourceId(next.captureSetup?.sourceId ?? next.recording?.sourceId ?? "");
         setSaveState("saved");
         setSaveError(null);
       }
@@ -245,7 +323,11 @@ export function useDesktopStudioController() {
 
   async function startRecording() {
     if (!selectedSource) {
-      setCaptureError("Select a browser source before recording.");
+      setCaptureError("Select a capture source before recording.");
+      return;
+    }
+    if (captureFrameMode === "crop" && !cropRegion) {
+      setCaptureError("Select a crop region before recording.");
       return;
     }
 
@@ -349,23 +431,43 @@ export function useDesktopStudioController() {
     setPlayheadMs(durationMs);
     setRecordingDurationMs(durationMs);
 
-    const session: RecordingSession = {
-      id: crypto.randomUUID(),
-      sourceId: selectedSource?.id ?? "",
-      sourceType: selectedSource?.sourceType ?? "browser-window",
-      sourceName: selectedSource?.name ?? "Unknown source",
-      startedAt: new Date(Date.now() - durationMs).toISOString(),
-      endedAt: new Date().toISOString(),
-      durationMs,
-      fps: 30,
-      width,
-      height,
-      audioEnabled: false
-    };
+      const session: RecordingSession = {
+        id: crypto.randomUUID(),
+        sourceId: selectedSource?.id ?? "",
+        sourceType: selectedSource?.sourceType ?? "window",
+        sourceName: selectedSource?.name ?? "Unknown source",
+        startedAt: new Date(Date.now() - durationMs).toISOString(),
+        endedAt: new Date().toISOString(),
+        durationMs,
+        fps: 30,
+        width,
+        height,
+        audioEnabled: false,
+        captureSetup: {
+          sourceId: selectedSource?.id ?? "",
+          sourceType: selectedSource?.sourceType ?? "window",
+          sourceName: selectedSource?.name ?? "Unknown source",
+          frameAspectRatio,
+          cropRegion: cropRegion ?? undefined
+        },
+        sourceBounds: { width, height },
+        frameBounds: getFrameBounds(frameAspectRatio, width, height)
+      };
 
     try {
       const savedRecording = await window.desktopApi.recording.save({ data: buffer, session });
-      setProject((current) => ({ ...current, recording: savedRecording, updatedAt: new Date().toISOString() }));
+      setProject((current) => ({
+        ...current,
+        captureSetup: {
+          sourceId: selectedSource?.id ?? "",
+          sourceType: selectedSource?.sourceType ?? "window",
+          sourceName: selectedSource?.name ?? "Unknown source",
+          frameAspectRatio,
+          cropRegion: cropRegion ?? undefined
+        },
+        recording: savedRecording,
+        updatedAt: new Date().toISOString()
+      }));
       markProjectDirty();
     } catch (error) {
       setSaveState("error");
@@ -374,6 +476,9 @@ export function useDesktopStudioController() {
   }
 
   function addZoomFromPreview(event: MouseEvent<HTMLDivElement>) {
+    if (captureFrameMode === "crop") {
+      return;
+    }
     if (recorderState !== "recording" && recorderState !== "stopped" && playbackState !== "paused" && playbackState !== "playing") {
       return;
     }
@@ -417,6 +522,57 @@ export function useDesktopStudioController() {
     setSelectedZoomId(null);
   }
 
+  function beginCropSelection(event: PointerEvent<HTMLDivElement>) {
+    if (captureFrameMode !== "crop") {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    const y = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+    cropStartRef.current = { x, y };
+    setCropDraftRegion({ x, y, width: 0, height: 0 });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function updateCropSelection(event: PointerEvent<HTMLDivElement>) {
+    if (captureFrameMode !== "crop" || !cropStartRef.current) {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    const y = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+    setCropDraftRegion(normalizeCropRegion(cropStartRef.current, { x, y }));
+    event.preventDefault();
+  }
+
+  function endCropSelection(event: PointerEvent<HTMLDivElement>) {
+    if (captureFrameMode !== "crop" || !cropStartRef.current) {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    const y = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+    const nextCrop = normalizeCropRegion(cropStartRef.current, { x, y });
+    cropStartRef.current = null;
+    setCropRegion(nextCrop.width < 0.03 || nextCrop.height < 0.03 ? null : nextCrop);
+    setCropDraftRegion(null);
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore release failures when pointer capture is unavailable.
+    }
+    event.preventDefault();
+    markProjectDirty();
+  }
+
+  function clearCropSelection() {
+    cropStartRef.current = null;
+    setCropRegion(null);
+    setCropDraftRegion(null);
+    markProjectDirty();
+  }
+
   function setProjectName(name: string) {
     setProject((current) => ({ ...current, name, updatedAt: new Date().toISOString() }));
     markProjectDirty();
@@ -450,6 +606,40 @@ export function useDesktopStudioController() {
 
   function setBrowserFrameVisible(visible: boolean) {
     setProject((current) => ({ ...current, includeBrowserFrame: visible, updatedAt: new Date().toISOString() }));
+    markProjectDirty();
+  }
+
+  function setFrameAspect(next: FrameAspectRatio) {
+    setFrameAspectRatio(next);
+    markProjectDirty();
+  }
+
+  function setCaptureFrameSelection(next: CaptureFrameMode) {
+    setCaptureFrameMode(next);
+    if (next === "fit") {
+      setCropRegion(null);
+      setCropDraftRegion(null);
+    }
+  }
+
+  function setSelectedSource(nextSourceId: string) {
+    setSelectedSourceId(nextSourceId);
+    markProjectDirty();
+  }
+
+  function updateZoomBoundary(segmentId: string, edge: "start" | "end", nextMs: number) {
+    setProject((current) => ({
+      ...current,
+      zoomSegments: current.zoomSegments.map((segment) =>
+        segment.id === segmentId
+          ? normalizeSegment({
+              ...segment,
+              [edge === "start" ? "startMs" : "endMs"]: nextMs
+            })
+          : segment
+      ),
+      updatedAt: new Date().toISOString()
+    }));
     markProjectDirty();
   }
 
@@ -572,14 +762,19 @@ export function useDesktopStudioController() {
       exportJob,
       exportError,
       systemSummary,
-      elapsedMs
+      elapsedMs,
+      frameAspectRatio,
+      captureFrameMode,
+      cropRegion,
+      cropDraftRegion
     },
     derived: {
       selectedSource,
       selectedZoom,
       activeZoom,
       previewSourceUrl,
-      canPreviewPlay
+      canPreviewPlay,
+      hasCropRegion
     },
     refs: {
       videoRef
@@ -598,7 +793,14 @@ export function useDesktopStudioController() {
       setBackgroundPreset,
       pickBackgroundImage,
       setBrowserFrameVisible,
-      setSelectedSourceId,
+      setFrameAspect,
+      setCaptureFrameSelection,
+      clearCropSelection,
+      beginCropSelection,
+      updateCropSelection,
+      endCropSelection,
+      setSelectedSourceId: setSelectedSource,
+      updateZoomBoundary,
       setSelectedZoomId: focusZoom,
       seekPlayhead,
       jumpToStart,
@@ -613,4 +815,17 @@ export function useDesktopStudioController() {
       cancelExport
     }
   };
+}
+
+function getFrameBounds(frameAspectRatio: FrameAspectRatio, sourceWidth: number, sourceHeight: number) {
+  if (frameAspectRatio === "native") {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+  if (frameAspectRatio === "9:16") {
+    return { width: 1080, height: 1920 };
+  }
+  if (frameAspectRatio === "1:1") {
+    return { width: 1080, height: 1080 };
+  }
+  return { width: 1920, height: 1080 };
 }

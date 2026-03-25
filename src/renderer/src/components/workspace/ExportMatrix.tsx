@@ -3,6 +3,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Button } from "../ui/Button";
 import { Panel } from "../ui/Panel";
+import { Icon } from "../ui/Icon";
 
 export function ExportMatrix({
   presets,
@@ -33,7 +34,7 @@ export function ExportMatrix({
           <>
             <StatusBadge tone={tone}>{status}</StatusBadge>
             {status === "running" && (
-              <Button type="button" variant="ghost" onClick={onCancel}>
+              <Button type="button" variant="ghost" leading={<Icon name="cancel" />} onClick={onCancel}>
                 Cancel
               </Button>
             )}
@@ -51,6 +52,7 @@ export function ExportMatrix({
                 key={preset.aspectRatio}
                 type="button"
                 variant="solid"
+                leading={<Icon name="export" />}
                 disabled={!recordingReady || status === "running"}
                 onClick={() => onExport(preset)}
               >

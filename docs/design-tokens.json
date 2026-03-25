@@ -21,19 +21,19 @@
   },
   "color": {
     "neutral": {
-      "0": "#05070b",
-      "1": "#0a0f18",
-      "2": "#111927",
-      "3": "#1a2434",
-      "4": "#6f7c91",
-      "5": "#edf2f7"
+      "0": "#f7faff",
+      "1": "#eef4fb",
+      "2": "#ffffff",
+      "3": "#dbe6f5",
+      "4": "#627089",
+      "5": "#10213a"
     },
     "accent": {
-      "info": "#63d4ff",
-      "success": "#49d17d",
-      "warning": "#f0b84b",
-      "danger": "#ef6b6b",
-      "violet": "#a78bfa"
+      "info": "#1677ff",
+      "success": "#159a5d",
+      "warning": "#d97706",
+      "danger": "#d92d20",
+      "violet": "#6d5efc"
     }
   },
   "semantic": {
@@ -41,17 +41,17 @@
       "app": "{color.neutral.0}",
       "surface": "{color.neutral.1}",
       "surfaceElevated": "{color.neutral.2}",
-      "overlay": "rgba(5, 7, 11, 0.72)"
+      "overlay": "rgba(16, 33, 58, 0.16)"
     },
     "border": {
-      "default": "rgba(255, 255, 255, 0.08)",
+      "default": "rgba(99, 122, 165, 0.18)",
       "focus": "{color.accent.info}"
     },
     "text": {
       "primary": "{color.neutral.5}",
-      "secondary": "rgba(237, 242, 247, 0.76)",
+      "secondary": "rgba(16, 33, 58, 0.72)",
       "muted": "{color.neutral.4}",
-      "inverse": "{color.neutral.0}"
+      "inverse": "#ffffff"
     },
     "state": {
       "info": "{color.accent.info}",

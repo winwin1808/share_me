@@ -1,5 +1,6 @@
 import { Button } from "../ui/Button";
 import { FieldShell, TextField } from "../ui/Field";
+import { Icon, IconButton } from "../ui/Icon";
 import { Panel } from "../ui/Panel";
 import { StatusBadge } from "../ui/StatusBadge";
 
@@ -29,17 +30,15 @@ export function ProjectPanel({
           <StatusBadge tone={saveState === "error" ? "danger" : saveState === "saved" ? "success" : "neutral"}>
             {saveState}
           </StatusBadge>
-          <Button type="button" variant="ghost" onClick={onSave} disabled={saveState === "saving"}>
-            Save
-          </Button>
+          <IconButton label="Save project" icon="save" onClick={onSave} disabled={saveState === "saving"} />
         </>
       }
     >
       <div className="button-cluster">
-        <Button type="button" onClick={onNew}>
+        <Button type="button" leading={<Icon name="add" />} onClick={onNew}>
           New
         </Button>
-        <Button type="button" variant="soft" onClick={onOpen}>
+        <Button type="button" variant="soft" leading={<Icon name="folder-open" />} onClick={onOpen}>
           Open
         </Button>
       </div>

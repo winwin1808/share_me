@@ -5,13 +5,14 @@ type ButtonVariant = "solid" | "soft" | "ghost" | "accent" | "danger";
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   leading?: ReactNode;
+  iconOnly?: boolean;
 }
 
-export function Button({ variant = "soft", leading, className = "", children, ...props }: ButtonProps) {
+export function Button({ variant = "soft", leading, iconOnly = false, className = "", children, ...props }: ButtonProps) {
   return (
-    <button className={`ui-button ui-button-${variant} ${className}`.trim()} {...props}>
+    <button className={`ui-button ui-button-${variant} ${iconOnly ? "ui-button-icon" : ""} ${className}`.trim()} {...props}>
       {leading && <span className="ui-button-leading">{leading}</span>}
-      <span>{children}</span>
+      {children ? <span>{children}</span> : null}
     </button>
   );
 }

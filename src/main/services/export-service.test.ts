@@ -91,7 +91,7 @@ describe("FfmpegRenderAdapter", () => {
         exportPresets: [],
         background: { mode: "preset", preset: "slate" },
         includeBrowserFrame: false,
-        recording: { id: "rec-1", sourceId: "source-1", sourceType: "browser-window", sourceName: "Chrome", startedAt: "2024-01-01T00:00:00.000Z", durationMs: 1200, fps: 30, width: 1280, height: 720, audioEnabled: false, videoPath: "/Users/test/recording.webm" }
+        recording: { id: "rec-1", sourceId: "source-1", sourceType: "window", sourceName: "Chrome", startedAt: "2024-01-01T00:00:00.000Z", durationMs: 1200, fps: 30, width: 1280, height: 720, audioEnabled: false, videoPath: "/Users/test/recording.webm" }
       },
       preset: {
         aspectRatio: "16:9",
@@ -137,7 +137,7 @@ describe("FfmpegRenderAdapter", () => {
         exportPresets: [],
         background: { mode: "preset", preset: "slate" },
         includeBrowserFrame: false,
-        recording: { id: "rec-1", sourceId: "source-1", sourceType: "browser-window", sourceName: "Chrome", startedAt: "2024-01-01T00:00:00.000Z", durationMs: 1200, fps: 30, width: 1280, height: 720, audioEnabled: false, videoPath: "/Users/test/recording.webm" }
+        recording: { id: "rec-1", sourceId: "source-1", sourceType: "window", sourceName: "Chrome", startedAt: "2024-01-01T00:00:00.000Z", durationMs: 1200, fps: 30, width: 1280, height: 720, audioEnabled: false, videoPath: "/Users/test/recording.webm" }
       },
       preset: {
         aspectRatio: "9:16",
@@ -169,7 +169,7 @@ describe("FfmpegRenderAdapter", () => {
         exportPresets: [],
         background: { mode: "preset", preset: "slate" },
         includeBrowserFrame: false,
-        recording: { id: "rec-1", sourceId: "source-1", sourceType: "browser-window", sourceName: "Chrome", startedAt: "2024-01-01T00:00:00.000Z", durationMs: 1200, fps: 30, width: 1280, height: 720, audioEnabled: false, videoPath: "/Users/test/recording.webm" }
+        recording: { id: "rec-1", sourceId: "source-1", sourceType: "window", sourceName: "Chrome", startedAt: "2024-01-01T00:00:00.000Z", durationMs: 1200, fps: 30, width: 1280, height: 720, audioEnabled: false, videoPath: "/Users/test/recording.webm" }
       },
       preset: {
         aspectRatio: "1:1",
@@ -237,7 +237,7 @@ describe("FfmpegRenderAdapter", () => {
         recording: {
           id: "rec-1",
           sourceId: "source-1",
-          sourceType: "browser-window",
+          sourceType: "window",
           sourceName: "Chrome",
           startedAt: "2024-01-01T00:00:00.000Z",
           durationMs: 1200,
@@ -283,7 +283,7 @@ describe("FfmpegRenderAdapter", () => {
         recording: {
           id: "rec-1",
           sourceId: "source-1",
-          sourceType: "browser-window",
+          sourceType: "window",
           sourceName: "Chrome",
           startedAt: "2024-01-01T00:00:00.000Z",
           durationMs: 1200,
@@ -307,5 +307,58 @@ describe("FfmpegRenderAdapter", () => {
     const filterComplex = args[args.indexOf("-filter_complex") + 1];
     expect(filterComplex).toContain("[1:v]scale=1920:1080[bg]");
     expect(filterComplex).toContain("[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1");
+  });
+
+  it("applies capture crop regions before zoom-based export filters", async () => {
+    const child = new MockChildProcess();
+    spawnMock.mockReturnValue(child);
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: "/Users/test/Movies/output.mp4" });
+
+    const adapter = new FfmpegRenderAdapter();
+    await adapter.start({
+      project: {
+        id: "project-1",
+        version: 1,
+        name: "Project",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        captureSetup: {
+          frameAspectRatio: "9:16",
+          cropRegion: { x: 0.1, y: 0.1, width: 0.4, height: 0.6 }
+        },
+        zoomSegments: [],
+        cursorPath: [],
+        exportPresets: [],
+        background: { mode: "preset", preset: "slate" },
+        includeBrowserFrame: false,
+        recording: {
+          id: "rec-1",
+          sourceId: "source-1",
+          sourceType: "window",
+          sourceName: "Chrome",
+          startedAt: "2024-01-01T00:00:00.000Z",
+          durationMs: 1200,
+          fps: 30,
+          width: 1280,
+          height: 720,
+          audioEnabled: false,
+          captureSetup: {
+            frameAspectRatio: "9:16",
+            cropRegion: { x: 0.1, y: 0.1, width: 0.4, height: 0.6 }
+          },
+          videoPath: "/Users/test/recording.webm"
+        }
+      },
+      preset: {
+        aspectRatio: "9:16",
+        outputName: "cursorful-export-9x16.mp4",
+        includeBrowserFrame: false,
+        background: { mode: "preset", preset: "slate" }
+      }
+    });
+
+    const args = spawnMock.mock.calls[0][1];
+    const filter = args[args.indexOf("-vf") + 1];
+    expect(filter).toContain("crop=512:432:128:72");
   });
 });

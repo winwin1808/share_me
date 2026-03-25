@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopApi } from "../shared/ipc";
 import { IPC_CHANNELS } from "../shared/ipc";
-import type { ExportJob, ExportRequest, ProjectFileV1, SavedRecordingPayload } from "../shared/types";
+import type { ExportJob, ExportRequest, ProjectFileV1, SavedRecordingPayload, TrayCommand } from "../shared/types";
 
 const api: DesktopApi = {
   capture: {
@@ -23,7 +23,12 @@ const api: DesktopApi = {
   },
   app: {
     pickFile: (extensions?: string[]) => ipcRenderer.invoke(IPC_CHANNELS.appPickFile, extensions),
-    getSystemInfo: () => ipcRenderer.invoke(IPC_CHANNELS.appGetSystemInfo)
+    getSystemInfo: () => ipcRenderer.invoke(IPC_CHANNELS.appGetSystemInfo),
+    onTrayCommand: (callback: (command: TrayCommand) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, command: TrayCommand) => callback(command);
+      ipcRenderer.on(IPC_CHANNELS.trayCommand, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.trayCommand, listener);
+    }
   },
   recording: {
     save: (payload: SavedRecordingPayload) => ipcRenderer.invoke(IPC_CHANNELS.recordingSave, payload)
@@ -31,4 +36,3 @@ const api: DesktopApi = {
 };
 
 contextBridge.exposeInMainWorld("desktopApi", api);
-

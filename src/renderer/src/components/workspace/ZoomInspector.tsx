@@ -1,6 +1,7 @@
 import type { ZoomSegment } from "@shared/types";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Button } from "../ui/Button";
+import { Icon } from "../ui/Icon";
 import { FieldShell, SelectField, TextField } from "../ui/Field";
 import { Panel } from "../ui/Panel";
 import { EmptyState } from "../ui/EmptyState";
@@ -71,7 +72,7 @@ export function ZoomInspector({
             />
             <span>Follow cursor</span>
           </label>
-          <Button type="button" variant="danger" onClick={onRemove}>
+          <Button type="button" variant="danger" leading={<Icon name="trash" />} onClick={onRemove}>
             Remove zoom
           </Button>
         </div>

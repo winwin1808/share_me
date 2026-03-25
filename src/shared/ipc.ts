@@ -1,4 +1,4 @@
-import type { CaptureSource, ExportJob, ExportRequest, ProjectFileV1, SavedRecordingPayload, SystemInfo } from "./types";
+import type { CaptureSource, ExportJob, ExportRequest, ProjectFileV1, SavedRecordingPayload, SystemInfo, TrayCommand } from "./types";
 
 export const IPC_CHANNELS = {
   captureListSources: "capture:listSources",
@@ -10,7 +10,8 @@ export const IPC_CHANNELS = {
   exportProgress: "export:progress",
   appPickFile: "app:pickFile",
   appGetSystemInfo: "app:getSystemInfo",
-  recordingSave: "recording:save"
+  recordingSave: "recording:save",
+  trayCommand: "tray:command"
 } as const;
 
 export interface DesktopApi {
@@ -30,9 +31,9 @@ export interface DesktopApi {
   app: {
     pickFile: (extensions?: string[]) => Promise<string | null>;
     getSystemInfo: () => Promise<SystemInfo>;
+    onTrayCommand: (callback: (command: TrayCommand) => void) => () => void;
   };
   recording: {
     save: (payload: SavedRecordingPayload) => Promise<ProjectFileV1["recording"]>;
   };
 }
-

@@ -1,4 +1,5 @@
 import { Button } from "../ui/Button";
+import { Icon } from "../ui/Icon";
 import { Panel } from "../ui/Panel";
 import { StatusBadge } from "../ui/StatusBadge";
 
@@ -69,14 +70,20 @@ export function PlaybackBar({
     >
       <div className="playback-bar">
         <div className="playback-actions">
-          <Button type="button" variant="accent" onClick={onTogglePlayback} disabled={!canPlay || previewState === "live"}>
+          <Button
+            type="button"
+            variant="accent"
+            leading={<Icon name={previewState === "playing" ? "pause" : "play"} />}
+            onClick={onTogglePlayback}
+            disabled={!canPlay || previewState === "live"}
+          >
             {previewState === "playing" ? "Pause" : "Play"}
           </Button>
-          <Button type="button" variant="soft" onClick={onJumpToStart} disabled={!canPlay}>
-            To start
+          <Button type="button" variant="soft" leading={<Icon name="skip-start" />} onClick={onJumpToStart} disabled={!canPlay}>
+            Start
           </Button>
-          <Button type="button" variant="soft" onClick={onJumpToEnd} disabled={!canPlay}>
-            To end
+          <Button type="button" variant="soft" leading={<Icon name="skip-end" />} onClick={onJumpToEnd} disabled={!canPlay}>
+            End
           </Button>
         </div>
         <label className="playback-scrubber">

@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-Build a small, disciplined component system for the Electron app that supports:
+Build a disciplined component system for the Electron app that supports:
 
 - Browser capture setup
 - Recording state and source selection
@@ -10,7 +10,7 @@ Build a small, disciplined component system for the Electron app that supports:
 - Project persistence and export
 - Future macOS signing / packaging states
 
-The system should feel technical, calm, and precise. Base UI is monochrome-first. Color is used as a controlled accent layer for state, emphasis, and data separation.
+The system should feel technical, calm, and precise. The current direction is light glassmorphism with Ant-like hierarchy: clear spacing, visible structure, controlled blue accents, and readable surfaces.
 
 ## 2. Information Architecture
 
@@ -37,9 +37,10 @@ The system should feel technical, calm, and precise. Base UI is monochrome-first
 
 The app should always map to three stable zones:
 
+- Top bar: global identity, high-signal state, and quick actions
 - Left rail: project and capture controls
-- Center canvas: recording preview and timeline
-- Right rail: selected item inspector
+- Center canvas: recording preview above the unified timeline
+- Right rail: selected item inspector and export
 
 This layout is the default for desktop. On smaller widths, rails collapse into stacked panels without changing component contracts.
 
@@ -50,6 +51,8 @@ This layout is the default for desktop. On smaller widths, rails collapse into s
 - `AppShell`
   - Wraps the entire app
   - Owns grid layout, background, and responsive rail collapse
+- `GlassTopbar`
+  - Global state, project summary, and icon-first actions
 - `SectionPanel`
   - Generic framed container for grouped controls
   - Used for project, capture, look, export, and inspector blocks
@@ -61,7 +64,7 @@ This layout is the default for desktop. On smaller widths, rails collapse into s
 ### Capture and project
 
 - `SourcePicker`
-  - Lists browser tabs / windows
+  - Lists desktop capture sources surfaced by Electron, primarily windows and screens
   - Shows source type, thumbnail, and active state
 - `RecordControl`
   - Start / stop / pause controls
@@ -82,7 +85,8 @@ This layout is the default for desktop. On smaller widths, rails collapse into s
 - `ZoomIndicator`
   - Read-only overlay showing active zoom target and scale
 - `Timeline`
-  - Multi-track container for zoom segments and cursor path
+  - Single unified preview timeline
+  - Renders zoom events, playhead, and scrub state on one bar
 - `TimelineTrack`
   - Single logical lane for zoom blocks or cursor points
 - `ZoomClip`
@@ -222,7 +226,8 @@ This layout is the default for desktop. On smaller widths, rails collapse into s
 
 ### Principles
 
-- Monochrome first: structure, hierarchy, and spacing do the heavy lifting.
+- Light glass surfaces should carry the layout, not heavy opaque blocks.
+- Ant-style hierarchy: labels, cards, spacing, and strong action affordances.
 - Color is reserved for status, identity, and high-signal state.
 - Use moderate radius, not pill-heavy or sharp-rectangle extremes.
 - Prefer soft separation over thick borders.
@@ -252,10 +257,10 @@ Recommended default component radius:
 
 ### Base palette
 
-The app should live in neutral tones:
+The app should live in neutral light tones:
 
-- `neutral-0`: near black background
-- `neutral-1`: deep surface
+- `neutral-0`: app background
+- `neutral-1`: glass surface
 - `neutral-2`: elevated surface
 - `neutral-3`: subtle border
 - `neutral-4`: soft text
@@ -265,7 +270,7 @@ The app should live in neutral tones:
 
 Use a small set of disciplined accents:
 
-- `accent-info`: cyan or blue for focus, links, and active playback
+- `accent-info`: blue for focus, links, and active playback
 - `accent-success`: green for completed states
 - `accent-warning`: amber for caution and draft states
 - `accent-danger`: red for destructive or failed states
@@ -362,4 +367,3 @@ Example:
 - Do not encode state only by color.
 - Do not let local component state diverge from project truth.
 - Do not create bespoke components for one-off styling if a tokenized variant can solve it.
-

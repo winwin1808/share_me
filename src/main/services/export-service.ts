@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import { IPC_CHANNELS } from "../../shared/ipc";
-import type { ExportJob, ExportRequest, ExportAspectRatio, ZoomSegment } from "../../shared/types";
+import type { CaptureCropRegion, ExportAspectRatio, ExportJob, ExportRequest, ZoomSegment } from "../../shared/types";
 
 export interface RenderAdapter {
   start(request: ExportRequest): Promise<ExportJob>;
@@ -56,6 +56,18 @@ function toSeconds(ms: number): string {
   return (ms / 1000).toFixed(3);
 }
 
+function toPixels(value: number, total: number): number {
+  return Math.max(0, Math.min(total, Math.round(value * total)));
+}
+
+function buildCropFilter(region: CaptureCropRegion, sourceWidth: number, sourceHeight: number): string {
+  const cropWidth = Math.max(1, toPixels(region.width, sourceWidth));
+  const cropHeight = Math.max(1, toPixels(region.height, sourceHeight));
+  const cropX = Math.min(Math.max(0, toPixels(region.x, sourceWidth)), Math.max(0, sourceWidth - cropWidth));
+  const cropY = Math.min(Math.max(0, toPixels(region.y, sourceHeight)), Math.max(0, sourceHeight - cropHeight));
+  return `crop=${cropWidth}:${cropHeight}:${cropX}:${cropY}`;
+}
+
 function buildNestedExpression(segments: ZoomSegment[], valueForSegment: (segment: ZoomSegment) => string, fallback: string): string {
   return segments.reduceRight(
     (expression, segment) =>
@@ -73,11 +85,15 @@ function buildVideoFilter(
   const scaleExpression = buildNestedExpression(segments, (segment) => segment.scale.toFixed(3), "1");
   const targetXExpression = buildNestedExpression(segments, (segment) => segment.targetX.toFixed(4), "0.5");
   const targetYExpression = buildNestedExpression(segments, (segment) => segment.targetY.toFixed(4), "0.5");
+  const cropRegion = request.project.captureSetup?.cropRegion;
   const browserFrameCropTop =
-    request.preset.includeBrowserFrame || !request.project.recording
+    request.preset.includeBrowserFrame || !request.project.recording || cropRegion
       ? 0
       : Math.max(0, Math.round(request.project.recording.height * 0.06));
   const filterParts = [];
+  if (cropRegion && request.project.recording) {
+    filterParts.push(buildCropFilter(cropRegion, request.project.recording.width, request.project.recording.height));
+  }
   if (browserFrameCropTop > 0) {
     filterParts.push(`crop=iw:ih-${browserFrameCropTop}:0:${browserFrameCropTop}`);
   }

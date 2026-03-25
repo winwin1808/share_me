@@ -1,7 +1,31 @@
-export type CaptureSourceType = "browser-tab" | "browser-window" | "desktop-window";
-export type ExportAspectRatio = "16:9" | "9:16" | "1:1";
+export type CaptureSourceType = "tab" | "window" | "screen";
+export type FrameAspectRatio = "native" | "16:9" | "9:16" | "1:1";
+export type ExportAspectRatio = Exclude<FrameAspectRatio, "native">;
 export type ZoomEasing = "easeInOut" | "easeOut" | "linear";
 export type ExportJobStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
+export type CapturePermissionStatus = "unknown" | "granted" | "denied" | "restricted";
+export type CaptureSourceStatus = "unknown" | "available" | "unavailable";
+export type TrayCommand = "record" | "select-input" | "open-editor" | "stop-recording" | "quit";
+
+export interface CaptureBounds {
+  width: number;
+  height: number;
+}
+
+export interface CaptureCropRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CaptureSetup {
+  sourceId?: string;
+  sourceType?: CaptureSourceType;
+  sourceName?: string;
+  frameAspectRatio: FrameAspectRatio;
+  cropRegion?: CaptureCropRegion;
+}
 
 export interface CaptureSource {
   id: string;
@@ -9,6 +33,8 @@ export interface CaptureSource {
   thumbnailDataUrl?: string;
   sourceType: CaptureSourceType;
   displayId?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface RecordingSession {
@@ -23,6 +49,11 @@ export interface RecordingSession {
   width: number;
   height: number;
   audioEnabled: boolean;
+  captureSetup?: CaptureSetup;
+  sourceBounds?: CaptureBounds;
+  frameBounds?: CaptureBounds;
+  permissionStatus?: CapturePermissionStatus;
+  sourceStatus?: CaptureSourceStatus;
   videoPath?: string;
 }
 
@@ -73,12 +104,23 @@ export interface ProjectFileV1 {
   createdAt: string;
   updatedAt: string;
   storagePath?: string;
+  captureSetup?: CaptureSetup;
   recording?: RecordingSession;
   zoomSegments: ZoomSegment[];
   cursorPath: CursorPoint[];
   exportPresets: ExportPreset[];
   background: BackgroundConfig;
   includeBrowserFrame: boolean;
+}
+
+export interface TimelineEventViewModel {
+  id: string;
+  label: string;
+  startMs: number;
+  endMs: number;
+  kind: "zoom" | "marker" | "recording";
+  selected?: boolean;
+  active?: boolean;
 }
 
 export interface SystemInfo {
