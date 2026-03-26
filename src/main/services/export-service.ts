@@ -40,11 +40,15 @@ function toEvenDimension(value: number): number {
   return rounded % 2 === 0 ? rounded : rounded - 1;
 }
 
+function resolvePositiveDimension(...values: Array<number | undefined>): number | undefined {
+  return values.find((value) => typeof value === "number" && Number.isFinite(value) && value > 0);
+}
+
 function getNativeRatio(recording?: RecordingSession): { width: number; height: number } {
-  const width = recording?.frameBounds?.width ?? recording?.width;
-  const height = recording?.frameBounds?.height ?? recording?.height;
+  const width = resolvePositiveDimension(recording?.frameBounds?.width, recording?.sourceBounds?.width, recording?.width);
+  const height = resolvePositiveDimension(recording?.frameBounds?.height, recording?.sourceBounds?.height, recording?.height);
   if (!width || !height) {
-    throw new ExportValidationError("INVALID_PRESET", "Unsupported aspect ratio: native");
+    throw new ExportValidationError("INVALID_PRESET", "Native export requires valid recording dimensions.");
   }
   return {
     width: toEvenDimension(width),

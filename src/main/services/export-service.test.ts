@@ -324,6 +324,53 @@ describe("FfmpegRenderAdapter", () => {
     expect(filterComplex).toContain("[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1");
   });
 
+  it("supports native export by falling back to source bounds when frame dimensions are missing", async () => {
+    const child = new MockChildProcess();
+    spawnMock.mockReturnValue(child);
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: "/Users/test/Movies/output.mp4" });
+
+    const adapter = new FfmpegRenderAdapter();
+    await adapter.start({
+      project: {
+        id: "project-1",
+        version: 1,
+        name: "Project",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        zoomSegments: [],
+        cursorPath: [],
+        exportPresets: [],
+        background: { mode: "preset", preset: "slate" },
+        includeBrowserFrame: false,
+        recording: {
+          id: "rec-1",
+          sourceId: "source-1",
+          sourceType: "window",
+          sourceName: "Chrome",
+          startedAt: "2024-01-01T00:00:00.000Z",
+          durationMs: 1200,
+          fps: 30,
+          width: 0,
+          height: 0,
+          audioEnabled: false,
+          sourceBounds: { width: 1441, height: 901 },
+          videoPath: "/Users/test/recording.webm"
+        }
+      },
+      preset: {
+        aspectRatio: "native",
+        outputName: "Shareme-export-native.mp4",
+        includeBrowserFrame: false,
+        background: { mode: "preset", preset: "slate" }
+      }
+    });
+
+    const args = spawnMock.mock.calls[0][1];
+    const filter = args[args.indexOf("-vf") + 1];
+    expect(filter).toContain("scale=1440:900:force_original_aspect_ratio=decrease");
+    expect(filter).toContain("pad=1440:900:(ow-iw)/2:(oh-ih)/2:0x111823");
+  });
+
   it("applies capture crop regions before zoom-based export filters", async () => {
     const child = new MockChildProcess();
     spawnMock.mockReturnValue(child);
