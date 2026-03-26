@@ -1,4 +1,4 @@
-name: release-macos
+name: release-desktop
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  package:
+  package-macos:
     runs-on: macos-latest
     env:
       APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -68,3 +68,45 @@ jobs:
         with:
           name: macos-release
           path: release/*.dmg
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Resolve release tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_tag="${{ inputs.tag }}"
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ "${release_tag}" != v* ]]; then
+            echo "Release tag must match v*." >&2
+            exit 1
+          fi
+
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+      - run: npm install
+      - name: Package Windows EXE
+        run: npm run package:win
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.release_tag }}
+          files: release/*.exe
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          prerelease: false
+          draft: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: release/*.exe

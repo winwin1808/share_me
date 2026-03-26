@@ -1,6 +1,6 @@
 {
   "name": "shareme-electron-mvp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Shareme is an Electron MVP for browser-first screen recording with editable zooms and offline export.",
   "main": "dist-electron/main/main.js",
@@ -19,6 +19,7 @@
     "test": "vitest run",
     "ci:build": "npm run typecheck && npm run test && npm run build",
     "package:mac": "npm run build && electron-builder --mac dmg zip --publish never",
+    "package:win": "npm run build && electron-builder --win nsis --publish never",
     "package:dir": "npm run build && electron-builder --dir --publish never"
   },
   "build": {
@@ -44,6 +45,12 @@
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "hardenedRuntime": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {

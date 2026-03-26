@@ -4,11 +4,16 @@
 
 Shareme is a macOS-first Electron app for browser and window recording with editable zooms, local project files, and offline MP4 exports.
 
-## Download for macOS
+## Download
 
-[Download the latest macOS release](https://github.com/winwin1808/share_me/releases/latest)
+[Download the latest desktop release](https://github.com/winwin1808/share_me/releases/latest)
 
-Each release attaches a `.dmg` built from a version tag such as `v0.1.0`.
+Each release attaches:
+
+- a macOS `.dmg`
+- a Windows `.exe`
+
+Both assets are built from a version tag such as `v0.1.1`.
 
 ## What it does
 
@@ -24,7 +29,7 @@ Each release attaches a `.dmg` built from a version tag such as `v0.1.0`.
 2. Commit the changes to `main`.
 3. Create a tag such as `v0.1.0`.
 4. Push the commit and tag.
-5. GitHub Actions builds the app and publishes the `.dmg` to GitHub Releases.
+5. GitHub Actions builds the macOS `.dmg` and Windows `.exe`, then publishes both to GitHub Releases.
 
 ## Local development
 
