@@ -103,12 +103,26 @@ function toPixels(value: number, total: number): number {
   return Math.max(0, Math.min(total, Math.round(value * total)));
 }
 
-function buildCropFilter(region: CaptureCropRegion, sourceWidth: number, sourceHeight: number): string {
+function resolveCropRegion(region: CaptureCropRegion, sourceWidth: number, sourceHeight: number): {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+} {
   const cropWidth = Math.max(1, toPixels(region.width, sourceWidth));
   const cropHeight = Math.max(1, toPixels(region.height, sourceHeight));
   const cropX = Math.min(Math.max(0, toPixels(region.x, sourceWidth)), Math.max(0, sourceWidth - cropWidth));
   const cropY = Math.min(Math.max(0, toPixels(region.y, sourceHeight)), Math.max(0, sourceHeight - cropHeight));
-  return `crop=${cropWidth}:${cropHeight}:${cropX}:${cropY}`;
+  return {
+    width: cropWidth,
+    height: cropHeight,
+    x: cropX,
+    y: cropY
+  };
+}
+
+function buildCropFilter(region: { width: number; height: number; x: number; y: number }): string {
+  return `crop=${region.width}:${region.height}:${region.x}:${region.y}`;
 }
 
 function buildNestedExpression(segments: ZoomSegment[], valueForSegment: (segment: ZoomSegment) => string, fallback: string): string {
@@ -219,19 +233,25 @@ function buildVideoFilter(
       ? 0
       : Math.max(0, Math.round(request.project.recording.height * 0.06));
   const filterParts = [];
+  let workingWidth = request.project.recording?.width ?? target.width;
+  let workingHeight = request.project.recording?.height ?? target.height;
   if (cropRegion && request.project.recording) {
-    filterParts.push(buildCropFilter(cropRegion, request.project.recording.width, request.project.recording.height));
+    const resolvedCrop = resolveCropRegion(cropRegion, request.project.recording.width, request.project.recording.height);
+    filterParts.push(buildCropFilter(resolvedCrop));
+    workingWidth = resolvedCrop.width;
+    workingHeight = resolvedCrop.height;
   }
   if (browserFrameCropTop > 0) {
-    filterParts.push(`crop=iw:ih-${browserFrameCropTop}:0:${browserFrameCropTop}`);
+    const browserFrameCropHeight = Math.max(1, workingHeight - browserFrameCropTop);
+    filterParts.push(`crop=${workingWidth}:${browserFrameCropHeight}:0:${browserFrameCropTop}`);
+    workingHeight = browserFrameCropHeight;
   }
 
-  const cropWidthExpression = `iw/(${scaleExpression})`;
-  const cropHeightExpression = `ih/(${scaleExpression})`;
-  const cropXExpression = `max(0,min(iw-(${cropWidthExpression}),iw*(${targetXExpression})-(${cropWidthExpression})/2))`;
-  const cropYExpression = `max(0,min(ih-(${cropHeightExpression}),ih*(${targetYExpression})-(${cropHeightExpression})/2))`;
+  const cropXExpression = `max(0,min(iw-${workingWidth},iw*(${targetXExpression})-${workingWidth}/2))`;
+  const cropYExpression = `max(0,min(ih-${workingHeight},ih*(${targetYExpression})-${workingHeight}/2))`;
 
-  filterParts.push(`crop='${cropWidthExpression}':'${cropHeightExpression}':'${cropXExpression}':'${cropYExpression}'`);
+  filterParts.push(`scale='${workingWidth}*(${scaleExpression})':'${workingHeight}*(${scaleExpression})':eval=frame`);
+  filterParts.push(`crop=${workingWidth}:${workingHeight}:'${cropXExpression}':'${cropYExpression}'`);
   filterParts.push(`scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease`);
   if (options.withPad) {
     const backgroundFill =

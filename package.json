@@ -1,6 +1,6 @@
 {
   "name": "shareme-electron-mvp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Shareme is an Electron MVP for browser-first screen recording with editable zooms and offline export.",
   "main": "dist-electron/main/main.js",

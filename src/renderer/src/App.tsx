@@ -157,6 +157,12 @@ export function App() {
   }, [editorFocusSignal]);
 
   useEffect(() => {
+    if (exportJob?.status === "completed") {
+      setExportModalOpen(false);
+    }
+  }, [exportJob?.status]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || isEditableTarget(event.target)) {
         return;

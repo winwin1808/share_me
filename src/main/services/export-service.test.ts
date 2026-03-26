@@ -120,9 +120,11 @@ describe("FfmpegRenderAdapter", () => {
     const args = spawnMock.mock.calls[0][1];
     expect(args).toEqual(expect.arrayContaining(["-i", "/Users/test/recording.webm", "-vf", expect.any(String)]));
     const filter = args[args.indexOf("-vf") + 1];
-    expect(filter).toContain("crop=iw:ih-43:0:43");
+    expect(filter).toContain("crop=1280:677:0:43");
     expect(filter).toContain("pow");
     expect(filter).toContain("(1.0000+((1.8000)-1.0000)*");
+    expect(filter).toContain("scale='1280*(");
+    expect(filter).toContain("crop=1280:677:'max(0,min(iw-1280");
     expect(filter).toContain("pad=1920:1080:(ow-iw)/2:(oh-ih)/2:0x111823");
     expect(args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-pix_fmt", "yuv420p", "/Users/test/Movies/output.mp4"]));
 
