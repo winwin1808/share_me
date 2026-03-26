@@ -25,7 +25,7 @@ describe("project utils", () => {
     expect(new Date(project.createdAt).getTime()).toBeGreaterThanOrEqual(before);
     expect(new Date(project.updatedAt).getTime()).toBeLessThanOrEqual(after + 1000);
     expect(project.recording).toBeUndefined();
-    expect(project.captureSetup).toEqual({ frameAspectRatio: "16:9" });
+    expect(project.captureSetup).toEqual({ frameAspectRatio: "16:9", autoZoomOnClickWhileRecording: false });
     expect(project.zoomSegments).toEqual([]);
     expect(project.cursorPath).toEqual([]);
     expect(project.exportPresets).toHaveLength(3);
@@ -51,7 +51,7 @@ describe("project utils", () => {
     expect(normalized.zoomSegments).toEqual([]);
     expect(normalized.cursorPath).toEqual([]);
     expect(normalized.exportPresets).toStrictEqual(DEFAULT_EXPORT_PRESETS);
-    expect(normalized.captureSetup).toEqual({ frameAspectRatio: "16:9" });
+    expect(normalized.captureSetup).toEqual({ frameAspectRatio: "16:9", autoZoomOnClickWhileRecording: false });
     expect(normalized.background).toEqual({ mode: "preset", preset: "slate" });
     expect(normalized.includeBrowserFrame).toBe(false);
   });
@@ -63,13 +63,14 @@ describe("project utils", () => {
       name: "Custom",
       createdAt: "2024-01-01T00:00:00.000Z",
       updatedAt: "2024-01-02T00:00:00.000Z",
-      storagePath: "/tmp/custom.cursorful.json",
+      storagePath: "/tmp/custom.shareme.json",
       captureSetup: {
         sourceId: "source-1",
         sourceType: "window",
         sourceName: "Chrome",
         frameAspectRatio: "9:16",
-        cropRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.7 }
+        cropRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.7 },
+        autoZoomOnClickWhileRecording: true
       },
       recording: undefined,
       zoomSegments: [],
@@ -85,11 +86,12 @@ describe("project utils", () => {
       sourceType: "window",
       sourceName: "Chrome",
       frameAspectRatio: "9:16",
-      cropRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.7 }
+      cropRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.7 },
+      autoZoomOnClickWhileRecording: true
     });
     expect(project.background).toEqual({ mode: "custom", preset: "ocean", customImagePath: "/tmp/bg.png" });
     expect(project.includeBrowserFrame).toBe(true);
-    expect(project.storagePath).toBe("/tmp/custom.cursorful.json");
+    expect(project.storagePath).toBe("/tmp/custom.shareme.json");
   });
 
   it("preserves recording references and cursor paths when reopening saved projects", () => {
@@ -116,7 +118,8 @@ describe("project utils", () => {
           sourceType: "window",
           sourceName: "Chrome",
           frameAspectRatio: "16:9",
-          cropRegion: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 }
+          cropRegion: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+          autoZoomOnClickWhileRecording: true
         },
         sourceBounds: { width: 1280, height: 720 },
         frameBounds: { width: 1920, height: 1080 },
@@ -146,6 +149,7 @@ describe("project utils", () => {
     expect(savedProject.cursorPath).toEqual([{ t: 1000, x: 0.25, y: 0.75 }]);
     expect(savedProject.zoomSegments).toHaveLength(1);
     expect(savedProject.recording?.captureSetup?.frameAspectRatio).toBe("16:9");
+    expect(savedProject.recording?.captureSetup?.autoZoomOnClickWhileRecording).toBe(true);
     expect(savedProject.exportPresets).toHaveLength(2);
     expect(savedProject.background).toEqual({ mode: "custom", preset: "ocean", customImagePath: "/tmp/bg.png" });
     expect(savedProject.includeBrowserFrame).toBe(true);
@@ -171,7 +175,7 @@ describe("project utils", () => {
     expect(project.zoomSegments).toEqual([]);
     expect(project.cursorPath).toEqual([]);
     expect(project.exportPresets).toStrictEqual(DEFAULT_EXPORT_PRESETS);
-    expect(project.captureSetup).toEqual({ frameAspectRatio: "16:9" });
+    expect(project.captureSetup).toEqual({ frameAspectRatio: "16:9", autoZoomOnClickWhileRecording: false });
     expect(project.background).toEqual({ mode: "preset", preset: "slate" });
     expect(project.includeBrowserFrame).toBe(true);
   });

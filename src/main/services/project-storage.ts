@@ -5,11 +5,11 @@ import type { ProjectFileV1 } from "../../shared/types";
 import { ensureProjectShape, normalizeProjectFile } from "../../shared/utils/project";
 
 export function projectsRootDir(): string {
-  return path.join(app.getPath("documents"), "CursorfulDesktopMvp", "projects");
+  return path.join(app.getPath("documents"), "shareme", "projects");
 }
 
 export function defaultProjectFilePath(projectId: string): string {
-  return path.join(projectsRootDir(), `${projectId}.cursorful.json`);
+  return path.join(projectsRootDir(), `${projectId}.shareme.json`);
 }
 
 export function resolveProjectFilePath(project: ProjectFileV1): string {

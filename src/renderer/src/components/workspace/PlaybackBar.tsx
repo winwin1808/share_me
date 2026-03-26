@@ -1,35 +1,10 @@
+import { memo } from "react";
+import type { ReactNode } from "react";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
-import { Panel } from "../ui/Panel";
-import { StatusBadge } from "../ui/StatusBadge";
+import { Tooltip } from "../ui/Tooltip";
 
 type PreviewState = "idle" | "live" | "playing" | "paused";
-
-function toneForState(state: PreviewState) {
-  switch (state) {
-    case "live":
-      return "success";
-    case "playing":
-      return "accent";
-    case "paused":
-      return "warning";
-    default:
-      return "neutral";
-  }
-}
-
-function labelForState(state: PreviewState) {
-  switch (state) {
-    case "live":
-      return "recording";
-    case "playing":
-      return "playing";
-    case "paused":
-      return "paused";
-    default:
-      return "idle";
-  }
-}
 
 function formatMs(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -40,66 +15,52 @@ function formatMs(ms: number): string {
   return `${minutes}:${seconds}`;
 }
 
-export function PlaybackBar({
+export const PlaybackBar = memo(function PlaybackBar({
   previewState,
   playheadMs,
   durationMs,
   canPlay,
   onTogglePlayback,
-  onSeek,
   onJumpToStart,
-  onJumpToEnd
+  onJumpToEnd,
+  actions
 }: {
   previewState: PreviewState;
   playheadMs: number;
   durationMs: number;
   canPlay: boolean;
   onTogglePlayback: () => void;
-  onSeek: (nextMs: number) => void;
   onJumpToStart: () => void;
   onJumpToEnd: () => void;
+  actions?: ReactNode;
 }) {
-  const max = Math.max(1, durationMs);
-
   return (
-    <Panel
-      eyebrow="Playback"
-      title="Preview controls"
-      actions={<StatusBadge tone={toneForState(previewState)}>{labelForState(previewState)}</StatusBadge>}
-      tone="raised"
-    >
-      <div className="playback-bar">
-        <div className="playback-actions">
+    <div className="playback-bar playback-bar-compact playback-toolbar">
+      <div className="playback-actions playback-toolbar-group">
+        <Tooltip content="Previous (Left)">
+          <Button type="button" variant="soft" iconOnly aria-label="Jump to start" onClick={onJumpToStart} disabled={!canPlay} leading={<Icon name="skip-start" />} />
+        </Tooltip>
+        <Tooltip content={previewState === "playing" ? "Pause (Space)" : "Play (Space)"}>
           <Button
             type="button"
             variant="accent"
-            leading={<Icon name={previewState === "playing" ? "pause" : "play"} />}
+            iconOnly
+            aria-label={previewState === "playing" ? "Pause" : "Play"}
             onClick={onTogglePlayback}
             disabled={!canPlay || previewState === "live"}
-          >
-            {previewState === "playing" ? "Pause" : "Play"}
-          </Button>
-          <Button type="button" variant="soft" leading={<Icon name="skip-start" />} onClick={onJumpToStart} disabled={!canPlay}>
-            Start
-          </Button>
-          <Button type="button" variant="soft" leading={<Icon name="skip-end" />} onClick={onJumpToEnd} disabled={!canPlay}>
-            End
-          </Button>
-        </div>
-        <label className="playback-scrubber">
-          <span className="playback-time">
-            {formatMs(playheadMs)} / {formatMs(durationMs)}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={max}
-            value={Math.min(playheadMs, max)}
-            onChange={(event) => onSeek(Number(event.target.value))}
-            disabled={!canPlay}
+            leading={<Icon name={previewState === "playing" ? "pause" : "play"} />}
           />
-        </label>
+        </Tooltip>
+        <Tooltip content="Next (Right)">
+          <Button type="button" variant="soft" iconOnly aria-label="Jump to end" onClick={onJumpToEnd} disabled={!canPlay} leading={<Icon name="skip-end" />} />
+        </Tooltip>
       </div>
-    </Panel>
+      <div className="playback-toolbar-center">
+        <span className="playback-time-pill" aria-label={`Timeline position ${formatMs(playheadMs)} of ${formatMs(durationMs)}`}>
+          {formatMs(playheadMs)} / {formatMs(durationMs)}
+        </span>
+      </div>
+      <div className="playback-toolbar-group playback-toolbar-meta">{actions}</div>
+    </div>
   );
-}
+});

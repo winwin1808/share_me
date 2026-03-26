@@ -1,17 +1,18 @@
 import { BrowserWindow, app, dialog } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
+import syncFs from "node:fs";
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import { IPC_CHANNELS } from "../../shared/ipc";
-import type { CaptureCropRegion, ExportAspectRatio, ExportJob, ExportRequest, ZoomSegment } from "../../shared/types";
+import type { CaptureCropRegion, CursorPoint, ExportAspectRatio, ExportJob, ExportRequest, RecordingSession, ZoomSegment } from "../../shared/types";
 
 export interface RenderAdapter {
   start(request: ExportRequest): Promise<ExportJob>;
   cancel(jobId: string): Promise<boolean>;
 }
 
-const ratios: Record<ExportAspectRatio, { width: number; height: number }> = {
+const ratios: Record<Exclude<ExportAspectRatio, "native">, { width: number; height: number }> = {
   "16:9": { width: 1920, height: 1080 },
   "9:16": { width: 1080, height: 1920 },
   "1:1": { width: 1080, height: 1080 }
@@ -22,6 +23,7 @@ const backgroundColors = {
   ocean: "0x11253A",
   sunset: "0x291621"
 } as const;
+const ZOOM_RAMP_FRACTION = 0.22;
 
 export class ExportValidationError extends Error {
   constructor(
@@ -33,7 +35,27 @@ export class ExportValidationError extends Error {
   }
 }
 
-function getRatio(aspectRatio: ExportAspectRatio): { width: number; height: number } {
+function toEvenDimension(value: number): number {
+  const rounded = Math.max(2, Math.round(value));
+  return rounded % 2 === 0 ? rounded : rounded - 1;
+}
+
+function getNativeRatio(recording?: RecordingSession): { width: number; height: number } {
+  const width = recording?.frameBounds?.width ?? recording?.width;
+  const height = recording?.frameBounds?.height ?? recording?.height;
+  if (!width || !height) {
+    throw new ExportValidationError("INVALID_PRESET", "Unsupported aspect ratio: native");
+  }
+  return {
+    width: toEvenDimension(width),
+    height: toEvenDimension(height)
+  };
+}
+
+function getRatio(aspectRatio: ExportAspectRatio, recording?: RecordingSession): { width: number; height: number } {
+  if (aspectRatio === "native") {
+    return getNativeRatio(recording);
+  }
   const target = ratios[aspectRatio];
   if (!target) {
     throw new ExportValidationError("INVALID_PRESET", `Unsupported aspect ratio: ${aspectRatio}`);
@@ -50,6 +72,23 @@ function resolveOutputPath(defaultPath: string): string {
     throw new ExportValidationError("INVALID_OUTPUT_PATH", "No output path was selected.");
   }
   return ensureMp4Extension(defaultPath);
+}
+
+function resolveFfmpegExecutablePath(): string {
+  if (!ffmpegPath) {
+    throw new ExportValidationError("FFMPEG_UNAVAILABLE", "ffmpeg-static is not available.");
+  }
+
+  if (!app.isPackaged) {
+    return ffmpegPath;
+  }
+
+  const unpackedPath = ffmpegPath.replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
+  if (unpackedPath !== ffmpegPath && syncFs.existsSync(unpackedPath)) {
+    return unpackedPath;
+  }
+
+  return ffmpegPath;
 }
 
 function toSeconds(ms: number): string {
@@ -76,15 +115,100 @@ function buildNestedExpression(segments: ZoomSegment[], valueForSegment: (segmen
   );
 }
 
+function buildEaseExpression(easing: ZoomSegment["easing"], progressExpression: string): string {
+  const progress = `max(0,min(1,${progressExpression}))`;
+  if (easing === "linear") {
+    return progress;
+  }
+  if (easing === "easeOut") {
+    return `(1-pow(1-${progress},2))`;
+  }
+  return `(if(lt(${progress},0.5),2*pow(${progress},2),1-pow(-2*${progress}+2,2)/2))`;
+}
+
+function buildSegmentProgressExpression(segment: ZoomSegment): string {
+  const duration = Math.max(segment.endMs - segment.startMs, 1);
+  return `((t-${toSeconds(segment.startMs)})/${toSeconds(duration)})`;
+}
+
+function buildSegmentIntensityExpression(segment: ZoomSegment): string {
+  const progress = `max(0,min(1,${buildSegmentProgressExpression(segment)}))`;
+  const rampFraction = ZOOM_RAMP_FRACTION.toFixed(2);
+  const rampIn = buildEaseExpression(segment.easing, `(${progress}/${rampFraction})`);
+  const rampOut = `1-${buildEaseExpression(segment.easing, `((${progress}-(1-${rampFraction}))/${rampFraction})`)}`;
+  return `(if(lte(${progress},${rampFraction}),${rampIn},if(gte(${progress},1-${rampFraction}),${rampOut},1)))`;
+}
+
+function buildInterpolatedExpression(
+  segments: ZoomSegment[],
+  fallback: number,
+  targetForSegment: (segment: ZoomSegment) => string
+): string {
+  return buildNestedExpression(
+    segments,
+    (segment) => {
+      const target = targetForSegment(segment);
+      const intensity = buildSegmentIntensityExpression(segment);
+      return `(${fallback.toFixed(4)}+((${target})-${fallback.toFixed(4)})*${intensity})`;
+    },
+    fallback.toFixed(4)
+  );
+}
+
+function buildFollowCursorTargetExpression(
+  segment: ZoomSegment,
+  cursorPath: CursorPoint[],
+  axis: "x" | "y"
+): string {
+  const staticTarget = axis === "x" ? segment.targetX : segment.targetY;
+  const relevantPoints = cursorPath
+    .filter((point) => point.t >= segment.startMs && point.t <= segment.endMs)
+    .sort((a, b) => a.t - b.t);
+
+  if (relevantPoints.length === 0) {
+    return staticTarget.toFixed(4);
+  }
+
+  if (relevantPoints.length === 1) {
+    return (axis === "x" ? relevantPoints[0].x : relevantPoints[0].y).toFixed(4);
+  }
+
+  const expressions: string[] = [];
+  const firstPoint = relevantPoints[0];
+  expressions.push(
+    `if(lte(t,${toSeconds(firstPoint.t)}),${(axis === "x" ? firstPoint.x : firstPoint.y).toFixed(4)},`
+  );
+
+  for (let index = 0; index < relevantPoints.length - 1; index += 1) {
+    const current = relevantPoints[index];
+    const next = relevantPoints[index + 1];
+    const currentValue = axis === "x" ? current.x : current.y;
+    const nextValue = axis === "x" ? next.x : next.y;
+    const duration = Math.max(next.t - current.t, 1);
+    const progress = `((t-${toSeconds(current.t)})/${toSeconds(duration)})`;
+    const interpolation = `(${currentValue.toFixed(4)}+(${nextValue.toFixed(4)}-${currentValue.toFixed(4)})*max(0,min(1,${progress})))`;
+    expressions.push(`if(between(t,${toSeconds(current.t)},${toSeconds(next.t)}),${interpolation},`);
+  }
+
+  const lastPoint = relevantPoints[relevantPoints.length - 1];
+  expressions.push(`${(axis === "x" ? lastPoint.x : lastPoint.y).toFixed(4)}`);
+
+  return `${expressions.join("")}${")".repeat(relevantPoints.length)}`;
+}
+
 function buildVideoFilter(
   request: ExportRequest,
   target: { width: number; height: number },
   options: { withPad: boolean }
 ): string {
   const segments = [...request.project.zoomSegments].sort((a, b) => a.startMs - b.startMs);
-  const scaleExpression = buildNestedExpression(segments, (segment) => segment.scale.toFixed(3), "1");
-  const targetXExpression = buildNestedExpression(segments, (segment) => segment.targetX.toFixed(4), "0.5");
-  const targetYExpression = buildNestedExpression(segments, (segment) => segment.targetY.toFixed(4), "0.5");
+  const scaleExpression = buildInterpolatedExpression(segments, 1, (segment) => segment.scale.toFixed(4));
+  const targetXExpression = buildInterpolatedExpression(segments, 0.5, (segment) =>
+    segment.followCursor ? buildFollowCursorTargetExpression(segment, request.project.cursorPath, "x") : segment.targetX.toFixed(4)
+  );
+  const targetYExpression = buildInterpolatedExpression(segments, 0.5, (segment) =>
+    segment.followCursor ? buildFollowCursorTargetExpression(segment, request.project.cursorPath, "y") : segment.targetY.toFixed(4)
+  );
   const cropRegion = request.project.captureSetup?.cropRegion;
   const browserFrameCropTop =
     request.preset.includeBrowserFrame || !request.project.recording || cropRegion
@@ -121,9 +245,7 @@ export class FfmpegRenderAdapter implements RenderAdapter {
     if (!sourceVideoPath) {
       throw new ExportValidationError("NO_SOURCE_RECORDING", "No source recording is available for export.");
     }
-    if (!ffmpegPath) {
-      throw new ExportValidationError("FFMPEG_UNAVAILABLE", "ffmpeg-static is not available.");
-    }
+    const ffmpegExecutablePath = resolveFfmpegExecutablePath();
 
     const defaultPath = path.join(app.getPath("videos"), request.preset.outputName);
     const result = await dialog.showSaveDialog({
@@ -144,7 +266,7 @@ export class FfmpegRenderAdapter implements RenderAdapter {
 
     const outputPath = resolveOutputPath(result.filePath);
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
-    const target = getRatio(request.preset.aspectRatio);
+    const target = getRatio(request.preset.aspectRatio, request.project.recording);
     const useCustomBackground =
       request.preset.background.mode === "custom" && Boolean(request.preset.background.customImagePath);
     const durationMs = request.project.recording?.durationMs ?? 0;
@@ -163,7 +285,7 @@ export class FfmpegRenderAdapter implements RenderAdapter {
       args.push("-vf", editedVideoFilter);
     }
     args.push("-c:v", "libx264", "-pix_fmt", "yuv420p", "-progress", "pipe:1", "-nostats", outputPath);
-    const child = spawn(ffmpegPath, args);
+    const child = spawn(ffmpegExecutablePath, args);
     const jobId = crypto.randomUUID();
     const job: ExportJob = {
       id: jobId,

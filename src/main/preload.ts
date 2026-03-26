@@ -5,7 +5,8 @@ import type { ExportJob, ExportRequest, ProjectFileV1, SavedRecordingPayload, Tr
 
 const api: DesktopApi = {
   capture: {
-    listSources: () => ipcRenderer.invoke(IPC_CHANNELS.captureListSources)
+    listSources: () => ipcRenderer.invoke(IPC_CHANNELS.captureListSources),
+    getCursorState: () => ipcRenderer.invoke(IPC_CHANNELS.captureGetCursorState)
   },
   project: {
     create: (name?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectCreate, name),

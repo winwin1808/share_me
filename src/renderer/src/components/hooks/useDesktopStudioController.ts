@@ -3,25 +3,29 @@ import type { MouseEvent, PointerEvent } from "react";
 import type {
   CaptureCropRegion,
   CaptureSource,
+  CursorPoint,
   ExportJob,
   ExportPreset,
   FrameAspectRatio,
+  GlobalCursorState,
   ProjectFileV1,
   RecordingSession,
   ZoomSegment
 } from "@shared/types";
 import { createProject } from "@shared/utils/project";
-import { createZoomSegment, getActiveZoom, updateSegment } from "@shared/utils/zoom";
+import { createZoomSegment, getZoomPreviewTime, getZoomStateAtTime } from "@shared/utils/zoom";
 
 type RecorderState = "idle" | "recording" | "stopped";
 type SourceState = "loading" | "ready" | "error";
 type PreviewState = "idle" | "live" | "playing" | "paused";
 type SaveState = "idle" | "saving" | "saved" | "error";
 type CaptureFrameMode = "fit" | "crop";
+type PendingTrayAction = "record" | null;
 
 const MIN_ZOOM_SCALE = 1;
 const MAX_ZOOM_SCALE = 3;
 const MIN_ZOOM_DURATION_MS = 120;
+const CURSOR_SAMPLE_INTERVAL_MS = 100;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -29,6 +33,14 @@ function clamp(value: number, min: number, max: number): number {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isPlaybackInterruptionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.name === "AbortError" || error.message.includes("play() request was interrupted");
 }
 
 function normalizeSegment(segment: ZoomSegment): ZoomSegment {
@@ -45,12 +57,39 @@ function normalizeSegment(segment: ZoomSegment): ZoomSegment {
 }
 
 function filePathToUrl(filePath: string): string {
-  const normalized = filePath.startsWith("/") ? filePath : `/${filePath}`;
-  return `file://${encodeURI(normalized)}`;
+  return `shareme-file://local${encodeURI(filePath)}`;
+}
+
+function getFileName(filePath: string): string {
+  const normalized = filePath.replaceAll("\\", "/");
+  return normalized.split("/").pop() || filePath;
+}
+
+function padTimestampPart(value: number): string {
+  return value.toString().padStart(2, "0");
+}
+
+function formatExportTimestamp(date: Date): string {
+  const year = date.getFullYear();
+  const month = padTimestampPart(date.getMonth() + 1);
+  const day = padTimestampPart(date.getDate());
+  const hours = padTimestampPart(date.getHours());
+  const minutes = padTimestampPart(date.getMinutes());
+  const seconds = padTimestampPart(date.getSeconds());
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+}
+
+function createProjectExportPreset(project: ProjectFileV1, frameAspectRatio: FrameAspectRatio): ExportPreset {
+  return {
+    aspectRatio: frameAspectRatio,
+    outputName: `Shareme-export-${formatExportTimestamp(new Date())}.mp4`,
+    includeBrowserFrame: project.includeBrowserFrame,
+    background: project.background
+  };
 }
 
 function createProjectFocus(project: ProjectFileV1): number {
-  return project.zoomSegments[0]?.startMs ?? 0;
+  return project.zoomSegments[0] ? getZoomPreviewTime(project.zoomSegments[0]) : 0;
 }
 
 function normalizeCropRegion(start: { x: number; y: number }, end: { x: number; y: number }): CaptureCropRegion {
@@ -66,8 +105,57 @@ function normalizeCropRegion(start: { x: number; y: number }, end: { x: number; 
   };
 }
 
+function normalizeCursorPosition(cursorState: GlobalCursorState, captureSource: CaptureSource): { x: number; y: number } | null {
+  const { displayBounds, displayId } = cursorState;
+  if (displayBounds.width <= 0 || displayBounds.height <= 0) {
+    return null;
+  }
+
+  if (captureSource.sourceType === "screen" && captureSource.displayId && displayId && captureSource.displayId !== displayId) {
+    return null;
+  }
+
+  const normalizedX = (cursorState.x - displayBounds.x) / displayBounds.width;
+  const normalizedY = (cursorState.y - displayBounds.y) / displayBounds.height;
+
+  if (!Number.isFinite(normalizedX) || !Number.isFinite(normalizedY)) {
+    return null;
+  }
+
+  return {
+    x: clamp(normalizedX, 0, 1),
+    y: clamp(normalizedY, 0, 1)
+  };
+}
+
+function loadVideoMetadata(filePath: string): Promise<{ durationMs: number; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    const cleanup = () => {
+      video.onloadedmetadata = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      video.load();
+    };
+
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const durationMs = Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : 0;
+      const width = video.videoWidth || 1920;
+      const height = video.videoHeight || 1080;
+      cleanup();
+      resolve({ durationMs, width, height });
+    };
+    video.onerror = () => {
+      cleanup();
+      reject(new Error("Unable to read the selected video file."));
+    };
+    video.src = filePathToUrl(filePath);
+  });
+}
+
 export function useDesktopStudioController() {
-  const [project, setProject] = useState<ProjectFileV1>(() => createProject("Browser Capture MVP"));
+  const [project, setProject] = useState<ProjectFileV1>(() => createProject("Shareme Capture"));
   const [sources, setSources] = useState<CaptureSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string>("");
   const [recorderState, setRecorderState] = useState<RecorderState>("idle");
@@ -81,6 +169,7 @@ export function useDesktopStudioController() {
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [cursorPathVersion, setCursorPathVersion] = useState(0);
   const [exportJob, setExportJob] = useState<ExportJob | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [systemSummary, setSystemSummary] = useState("Loading system info...");
@@ -89,6 +178,12 @@ export function useDesktopStudioController() {
   const [captureFrameMode, setCaptureFrameMode] = useState<CaptureFrameMode>("fit");
   const [cropRegion, setCropRegion] = useState<CaptureCropRegion | null>(project.captureSetup?.cropRegion ?? null);
   const [cropDraftRegion, setCropDraftRegion] = useState<CaptureCropRegion | null>(null);
+  const [autoZoomOnClickWhileRecording, setAutoZoomOnClickWhileRecording] = useState(
+    project.captureSetup?.autoZoomOnClickWhileRecording ?? false
+  );
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [pendingTrayAction, setPendingTrayAction] = useState<PendingTrayAction>(null);
+  const [editorFocusSignal, setEditorFocusSignal] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -96,7 +191,14 @@ export function useDesktopStudioController() {
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
+  const cursorTimerRef = useRef<number | null>(null);
   const cropStartRef = useRef<{ x: number; y: number } | null>(null);
+  const playRequestIdRef = useRef(0);
+  const lastPreviewPlayheadRef = useRef(0);
+  const recordingSourceRef = useRef<CaptureSource | null>(null);
+  const recordedCursorPathRef = useRef<CursorPoint[]>([]);
+  const cursorSampleInFlightRef = useRef(false);
+  const cursorFallbackWarningRef = useRef(false);
 
   const selectedSource = useMemo(
     () => sources.find((source) => source.id === selectedSourceId) ?? null,
@@ -115,13 +217,19 @@ export function useDesktopStudioController() {
     () => Math.max(recordingDurationMs, project.recording?.durationMs ?? 0, elapsedMs),
     [elapsedMs, project.recording?.durationMs, recordingDurationMs]
   );
-  const activeZoom = useMemo(() => getActiveZoom(project.zoomSegments, playheadMs), [playheadMs, project.zoomSegments]);
+  const activeCursorPath = recorderState === "recording" ? recordedCursorPathRef.current : project.cursorPath;
+  const previewZoom = useMemo(
+    () => getZoomStateAtTime(project.zoomSegments, playheadMs, activeCursorPath),
+    [activeCursorPath, cursorPathVersion, playheadMs, project.zoomSegments]
+  );
+  const activeZoom = previewZoom.segment;
   const selectedZoom = useMemo(
     () => project.zoomSegments.find((segment) => segment.id === selectedZoomId) ?? null,
     [project.zoomSegments, selectedZoomId]
   );
   const canPreviewPlay = Boolean(previewSourceUrl);
   const hasCropRegion = Boolean(cropRegion);
+  const exportPreset = useMemo(() => createProjectExportPreset(project, frameAspectRatio), [frameAspectRatio, project]);
 
   useEffect(() => {
     void refreshSources();
@@ -147,11 +255,19 @@ export function useDesktopStudioController() {
           void startRecording();
         } else {
           void refreshSources();
+          setPendingTrayAction("record");
+          setSourcePickerOpen(true);
         }
         return;
       }
       if (command === "select-input") {
         void refreshSources();
+        setPendingTrayAction(null);
+        setSourcePickerOpen(true);
+        return;
+      }
+      if (command === "open-editor") {
+        setEditorFocusSignal((current) => current + 1);
         return;
       }
       if (command === "stop-recording") {
@@ -162,7 +278,7 @@ export function useDesktopStudioController() {
     return () => {
       unsubscribeTray();
     };
-  }, [selectedSourceId]);
+  }, [selectedSourceId, selectedSource, recorderState, captureFrameMode, cropRegion, frameAspectRatio]);
 
   useEffect(() => {
     return () => {
@@ -182,6 +298,27 @@ export function useDesktopStudioController() {
   }, [project.zoomSegments, selectedZoomId]);
 
   useEffect(() => {
+    if (recorderState === "recording" || !previewSourceUrl) {
+      return;
+    }
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) {
+      return;
+    }
+
+    const desiredTime = clamp(playheadMs, 0, Math.round(video.duration * 1000)) / 1000;
+    if (Math.abs(video.currentTime - desiredTime) <= 0.12) {
+      return;
+    }
+
+    try {
+      video.currentTime = desiredTime;
+    } catch {
+      // Ignore sync attempts before the browser allows seeking.
+    }
+  }, [playheadMs, previewSourceUrl, recorderState]);
+
+  useEffect(() => {
     setProject((current) => ({
       ...current,
       captureSetup: {
@@ -190,10 +327,20 @@ export function useDesktopStudioController() {
         sourceType: selectedSource?.sourceType ?? current.captureSetup?.sourceType,
         sourceName: selectedSource?.name ?? current.captureSetup?.sourceName,
         frameAspectRatio,
-        cropRegion: cropRegion ?? undefined
+        cropRegion: cropRegion ?? undefined,
+        autoZoomOnClickWhileRecording
       }
     }));
-  }, [cropRegion, frameAspectRatio, selectedSource]);
+  }, [autoZoomOnClickWhileRecording, cropRegion, frameAspectRatio, selectedSource]);
+
+  useEffect(() => {
+    return () => {
+      if (cursorTimerRef.current) {
+        window.clearInterval(cursorTimerRef.current);
+        cursorTimerRef.current = null;
+      }
+    };
+  }, []);
 
   async function refreshSources() {
     setSourceState("loading");
@@ -251,6 +398,67 @@ export function useDesktopStudioController() {
     }
   }
 
+  function stopCursorSampling(): void {
+    if (cursorTimerRef.current) {
+      window.clearInterval(cursorTimerRef.current);
+      cursorTimerRef.current = null;
+    }
+    cursorSampleInFlightRef.current = false;
+  }
+
+  async function sampleCursor(): Promise<void> {
+    if (cursorSampleInFlightRef.current) {
+      return;
+    }
+    const captureSource = recordingSourceRef.current;
+    if (!captureSource) {
+      return;
+    }
+
+    cursorSampleInFlightRef.current = true;
+    try {
+      const cursorState = await window.desktopApi.capture.getCursorState();
+      if (!cursorState) {
+        if (!cursorFallbackWarningRef.current) {
+          cursorFallbackWarningRef.current = true;
+          setCaptureError("Cursor tracking is unavailable. Follow-cursor zooms will fall back to the clicked target.");
+        }
+        return;
+      }
+
+      const normalizedPosition = normalizeCursorPosition(cursorState, captureSource);
+      if (!normalizedPosition) {
+        return;
+      }
+
+      const t = Math.max(0, Math.round(performance.now() - startedAtRef.current));
+      const previousSample = recordedCursorPathRef.current[recordedCursorPathRef.current.length - 1];
+      if (previousSample && previousSample.t === t) {
+        recordedCursorPathRef.current[recordedCursorPathRef.current.length - 1] = { t, ...normalizedPosition };
+        setCursorPathVersion((current) => current + 1);
+        return;
+      }
+
+      recordedCursorPathRef.current = [...recordedCursorPathRef.current, { t, ...normalizedPosition }];
+      setCursorPathVersion((current) => current + 1);
+    } catch {
+      if (!cursorFallbackWarningRef.current) {
+        cursorFallbackWarningRef.current = true;
+        setCaptureError("Cursor tracking is unavailable. Follow-cursor zooms will fall back to the clicked target.");
+      }
+    } finally {
+      cursorSampleInFlightRef.current = false;
+    }
+  }
+
+  function startCursorSampling(): void {
+    stopCursorSampling();
+    void sampleCursor();
+    cursorTimerRef.current = window.setInterval(() => {
+      void sampleCursor();
+    }, CURSOR_SAMPLE_INTERVAL_MS);
+  }
+
   function markProjectDirty(): void {
     setSaveState("idle");
     setSaveError(null);
@@ -260,14 +468,15 @@ export function useDesktopStudioController() {
     setSelectedZoomId(segmentId);
     const segment = project.zoomSegments.find((item) => item.id === segmentId);
     if (segment) {
-      seekPlayhead(segment.startMs);
+      seekPlayhead(getZoomPreviewTime(segment));
     }
   }
 
   async function createNewProject() {
+    stopCursorSampling();
     detachLiveStream();
     clearRecordedPreviewUrl();
-    setProject(createProject("Browser Capture MVP"));
+    setProject(createProject("Shareme Capture"));
     resetPlaybackState();
     setExportJob(null);
     setExportError(null);
@@ -280,10 +489,14 @@ export function useDesktopStudioController() {
     setFrameAspectRatio("16:9");
     setCropRegion(null);
     setCropDraftRegion(null);
+    setAutoZoomOnClickWhileRecording(false);
+    setSourcePickerOpen(false);
+    setPendingTrayAction(null);
   }
 
   async function openProject() {
     try {
+      stopCursorSampling();
       detachLiveStream();
       const next = await window.desktopApi.project.open();
       if (next) {
@@ -298,6 +511,7 @@ export function useDesktopStudioController() {
         setFrameAspectRatio(savedFrameAspectRatio);
         setCropRegion(savedCropRegion);
         setCaptureFrameMode(savedCropRegion ? "crop" : "fit");
+        setAutoZoomOnClickWhileRecording(next.captureSetup?.autoZoomOnClickWhileRecording ?? false);
         setSelectedSourceId(next.captureSetup?.sourceId ?? next.recording?.sourceId ?? "");
         setSaveState("saved");
         setSaveError(null);
@@ -305,6 +519,80 @@ export function useDesktopStudioController() {
     } catch (error) {
       setSaveState("error");
       setSaveError(formatError(error));
+    }
+  }
+
+  async function importVideoFile() {
+    try {
+      stopCursorSampling();
+      const videoPath = await window.desktopApi.app.pickFile(["mp4", "mov"]);
+      if (!videoPath) {
+        return;
+      }
+
+      detachLiveStream();
+      clearRecordedPreviewUrl();
+      setCaptureError(null);
+      setExportError(null);
+      setSaveError(null);
+
+      const { durationMs, width, height } = await loadVideoMetadata(videoPath);
+      const sourceName = getFileName(videoPath);
+      const now = new Date().toISOString();
+      const nextFrameAspectRatio = frameAspectRatio ?? "16:9";
+      const importedRecording: RecordingSession = {
+        id: crypto.randomUUID(),
+        sourceId: `imported:${crypto.randomUUID()}`,
+        sourceType: "window",
+        sourceName,
+        startedAt: now,
+        endedAt: now,
+        durationMs,
+        fps: 30,
+        width,
+        height,
+        audioEnabled: true,
+        captureSetup: {
+          sourceId: `imported:${sourceName}`,
+          sourceType: "window",
+          sourceName,
+          frameAspectRatio: nextFrameAspectRatio,
+          cropRegion: cropRegion ?? undefined,
+          autoZoomOnClickWhileRecording
+        },
+        sourceBounds: { width, height },
+        frameBounds: getFrameBounds(nextFrameAspectRatio, width, height),
+        permissionStatus: "unknown",
+        sourceStatus: "available",
+        videoPath
+      };
+
+      setProject((current) => ({
+        ...current,
+        name: current.recording ? current.name : sourceName.replace(/\.[^.]+$/, ""),
+        captureSetup: {
+          sourceId: importedRecording.sourceId,
+          sourceType: importedRecording.sourceType,
+          sourceName: importedRecording.sourceName,
+          frameAspectRatio: nextFrameAspectRatio,
+          cropRegion: cropRegion ?? undefined,
+          autoZoomOnClickWhileRecording
+        },
+        recording: importedRecording,
+        zoomSegments: [],
+        cursorPath: [],
+        updatedAt: new Date().toISOString()
+      }));
+      setSelectedSourceId("");
+      setSelectedZoomId(null);
+      setPlayheadMs(0);
+      setRecordingDurationMs(durationMs);
+      setElapsedMs(durationMs);
+      setPlaybackState("paused");
+      setRecorderState("idle");
+      markProjectDirty();
+    } catch (error) {
+      setCaptureError(formatError(error));
     }
   }
 
@@ -321,8 +609,9 @@ export function useDesktopStudioController() {
     }
   }
 
-  async function startRecording() {
-    if (!selectedSource) {
+  async function startRecording(sourceOverride?: CaptureSource | null) {
+    const captureSource = sourceOverride ?? selectedSource;
+    if (!captureSource) {
       setCaptureError("Select a capture source before recording.");
       return;
     }
@@ -335,6 +624,10 @@ export function useDesktopStudioController() {
     setExportError(null);
     setExportJob(null);
     clearRecordedPreviewUrl();
+    recordingSourceRef.current = captureSource;
+    recordedCursorPathRef.current = [];
+    setCursorPathVersion(0);
+    cursorFallbackWarningRef.current = false;
     setPlaybackState("live");
     setPlayheadMs(0);
     setRecordingDurationMs(0);
@@ -346,7 +639,7 @@ export function useDesktopStudioController() {
         video: {
           mandatory: {
             chromeMediaSource: "desktop",
-            chromeMediaSourceId: selectedSource.id,
+            chromeMediaSourceId: captureSource.id,
             minWidth: 1280,
             minHeight: 720,
             maxWidth: 2560,
@@ -384,8 +677,10 @@ export function useDesktopStudioController() {
         setPlayheadMs(nextElapsed);
         setRecordingDurationMs(nextElapsed);
       }, 100);
+      startCursorSampling();
       setRecorderState("recording");
     } catch (error) {
+      stopCursorSampling();
       setPlaybackState("idle");
       setCaptureError(formatError(error));
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -395,6 +690,7 @@ export function useDesktopStudioController() {
   }
 
   function stopRecording() {
+    stopCursorSampling();
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
     }
@@ -409,9 +705,17 @@ export function useDesktopStudioController() {
   }
 
   async function finalizeRecording() {
+    const captureSource = recordingSourceRef.current;
     const blob = new Blob(chunksRef.current, { type: "video/webm" });
     if (blob.size === 0) {
       setCaptureError("Recording finished with no data.");
+      recordingSourceRef.current = null;
+      return;
+    }
+
+    if (!captureSource) {
+      setCaptureError("Recording source context was lost before saving.");
+      recordingSourceRef.current = null;
       return;
     }
 
@@ -433,9 +737,9 @@ export function useDesktopStudioController() {
 
       const session: RecordingSession = {
         id: crypto.randomUUID(),
-        sourceId: selectedSource?.id ?? "",
-        sourceType: selectedSource?.sourceType ?? "window",
-        sourceName: selectedSource?.name ?? "Unknown source",
+        sourceId: captureSource.id,
+        sourceType: captureSource.sourceType,
+        sourceName: captureSource.name,
         startedAt: new Date(Date.now() - durationMs).toISOString(),
         endedAt: new Date().toISOString(),
         durationMs,
@@ -444,9 +748,9 @@ export function useDesktopStudioController() {
         height,
         audioEnabled: false,
         captureSetup: {
-          sourceId: selectedSource?.id ?? "",
-          sourceType: selectedSource?.sourceType ?? "window",
-          sourceName: selectedSource?.name ?? "Unknown source",
+          sourceId: captureSource.id,
+          sourceType: captureSource.sourceType,
+          sourceName: captureSource.name,
           frameAspectRatio,
           cropRegion: cropRegion ?? undefined
         },
@@ -459,24 +763,31 @@ export function useDesktopStudioController() {
       setProject((current) => ({
         ...current,
         captureSetup: {
-          sourceId: selectedSource?.id ?? "",
-          sourceType: selectedSource?.sourceType ?? "window",
-          sourceName: selectedSource?.name ?? "Unknown source",
+          sourceId: captureSource.id,
+          sourceType: captureSource.sourceType,
+          sourceName: captureSource.name,
           frameAspectRatio,
-          cropRegion: cropRegion ?? undefined
+          cropRegion: cropRegion ?? undefined,
+          autoZoomOnClickWhileRecording
         },
         recording: savedRecording,
+        cursorPath: recordedCursorPathRef.current,
         updatedAt: new Date().toISOString()
       }));
       markProjectDirty();
     } catch (error) {
       setSaveState("error");
       setSaveError(formatError(error));
+    } finally {
+      recordingSourceRef.current = null;
     }
   }
 
   function addZoomFromPreview(event: MouseEvent<HTMLDivElement>) {
     if (captureFrameMode === "crop") {
+      return;
+    }
+    if (recorderState === "recording" && !autoZoomOnClickWhileRecording) {
       return;
     }
     if (recorderState !== "recording" && recorderState !== "stopped" && playbackState !== "paused" && playbackState !== "playing") {
@@ -486,6 +797,9 @@ export function useDesktopStudioController() {
     const targetX = clamp((event.clientX - rect.left) / rect.width, 0, 1);
     const targetY = clamp((event.clientY - rect.top) / rect.height, 0, 1);
     const nextSegment = createZoomSegment(playheadMs, targetX, targetY);
+    if (recorderState === "recording") {
+      nextSegment.followCursor = true;
+    }
     setProject((current) => ({
       ...current,
       zoomSegments: [...current.zoomSegments, nextSegment],
@@ -622,22 +936,56 @@ export function useDesktopStudioController() {
     }
   }
 
+  function setLiveAutoZoom(enabled: boolean) {
+    setAutoZoomOnClickWhileRecording(enabled);
+    markProjectDirty();
+  }
+
   function setSelectedSource(nextSourceId: string) {
     setSelectedSourceId(nextSourceId);
     markProjectDirty();
   }
 
+  function openSourcePicker(nextPendingAction: PendingTrayAction = null) {
+    setPendingTrayAction(nextPendingAction);
+    setSourcePickerOpen(true);
+  }
+
+  function closeSourcePicker() {
+    setPendingTrayAction(null);
+    setSourcePickerOpen(false);
+  }
+
+  async function chooseSourceFromPicker(sourceId: string) {
+    const nextSource = sources.find((source) => source.id === sourceId) ?? null;
+    setSelectedSourceId(sourceId);
+    setSourcePickerOpen(false);
+    const nextPending = pendingTrayAction;
+    setPendingTrayAction(null);
+    markProjectDirty();
+    if (nextPending === "record" && nextSource) {
+      await startRecording(nextSource);
+    }
+  }
+
   function updateZoomBoundary(segmentId: string, edge: "start" | "end", nextMs: number) {
+    const snappedNextMs = Math.max(0, Math.round(nextMs));
     setProject((current) => ({
       ...current,
-      zoomSegments: current.zoomSegments.map((segment) =>
-        segment.id === segmentId
-          ? normalizeSegment({
-              ...segment,
-              [edge === "start" ? "startMs" : "endMs"]: nextMs
-            })
-          : segment
-      ),
+      zoomSegments: current.zoomSegments.map((segment) => {
+        if (segment.id !== segmentId) {
+          return segment;
+        }
+
+        const nextStartMs = edge === "start" ? Math.min(snappedNextMs, segment.endMs - MIN_ZOOM_DURATION_MS) : segment.startMs;
+        const nextEndMs = edge === "end" ? Math.max(snappedNextMs, segment.startMs + MIN_ZOOM_DURATION_MS) : segment.endMs;
+
+        return normalizeSegment({
+          ...segment,
+          startMs: nextStartMs,
+          endMs: nextEndMs
+        });
+      }),
       updatedAt: new Date().toISOString()
     }));
     markProjectDirty();
@@ -645,6 +993,7 @@ export function useDesktopStudioController() {
 
   function seekPlayhead(nextMs: number) {
     const next = clamp(Math.round(nextMs), 0, Math.max(playheadDurationMs, 0));
+    lastPreviewPlayheadRef.current = next;
     setPlayheadMs(next);
     const video = videoRef.current;
     if (video && Number.isFinite(video.duration) && video.duration > 0) {
@@ -671,13 +1020,21 @@ export function useDesktopStudioController() {
     }
     try {
       if (video.paused) {
+        const requestId = ++playRequestIdRef.current;
         await video.play();
+        if (playRequestIdRef.current !== requestId) {
+          return;
+        }
         setPlaybackState("playing");
       } else {
+        playRequestIdRef.current += 1;
         video.pause();
         setPlaybackState("paused");
       }
     } catch (error) {
+      if (isPlaybackInterruptionError(error)) {
+        return;
+      }
       setPlaybackState("paused");
       setCaptureError(formatError(error));
     }
@@ -690,7 +1047,16 @@ export function useDesktopStudioController() {
     }
     const nextDuration = Math.round(video.duration * 1000);
     setRecordingDurationMs((current) => Math.max(current, nextDuration));
-    setPlayheadMs((current) => clamp(current, 0, nextDuration));
+    setPlayheadMs((current) => {
+      const nextPlayhead = clamp(current, 0, nextDuration);
+      lastPreviewPlayheadRef.current = nextPlayhead;
+      try {
+        video.currentTime = nextPlayhead / 1000;
+      } catch {
+        // Ignore early seeks before the media element is seekable.
+      }
+      return nextPlayhead;
+    });
   }
 
   function handlePreviewTimeUpdate() {
@@ -699,6 +1065,10 @@ export function useDesktopStudioController() {
       return;
     }
     const nextPlayhead = Math.round(video.currentTime * 1000);
+    if (nextPlayhead === lastPreviewPlayheadRef.current) {
+      return;
+    }
+    lastPreviewPlayheadRef.current = nextPlayhead;
     setPlayheadMs(nextPlayhead);
   }
 
@@ -721,10 +1091,13 @@ export function useDesktopStudioController() {
     setPlayheadMs(playheadDurationMs);
   }
 
-  async function startExport(preset: ExportPreset) {
+  async function startExport() {
     setExportError(null);
     try {
-      const job = await window.desktopApi.exportVideo.start({ project, preset });
+      const job = await window.desktopApi.exportVideo.start({
+        project,
+        preset: createProjectExportPreset(project, frameAspectRatio)
+      });
       setExportJob(job);
       if (job.status === "cancelled") {
         setExportError(null);
@@ -766,15 +1139,21 @@ export function useDesktopStudioController() {
       frameAspectRatio,
       captureFrameMode,
       cropRegion,
-      cropDraftRegion
+      cropDraftRegion,
+      autoZoomOnClickWhileRecording,
+      sourcePickerOpen,
+      pendingTrayAction,
+      editorFocusSignal
     },
     derived: {
       selectedSource,
       selectedZoom,
       activeZoom,
+      previewZoom,
       previewSourceUrl,
       canPreviewPlay,
-      hasCropRegion
+      hasCropRegion,
+      exportPreset
     },
     refs: {
       videoRef
@@ -783,6 +1162,7 @@ export function useDesktopStudioController() {
       refreshSources,
       createNewProject,
       openProject,
+      importVideoFile,
       saveProject,
       startRecording,
       stopRecording,
@@ -795,6 +1175,10 @@ export function useDesktopStudioController() {
       setBrowserFrameVisible,
       setFrameAspect,
       setCaptureFrameSelection,
+      setLiveAutoZoom,
+      openSourcePicker,
+      closeSourcePicker,
+      chooseSourceFromPicker,
       clearCropSelection,
       beginCropSelection,
       updateCropSelection,

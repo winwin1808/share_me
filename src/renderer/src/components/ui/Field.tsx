@@ -21,7 +21,7 @@ export function TextField(props: InputHTMLAttributes<HTMLInputElement>) {
 }
 
 export function SelectField(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className="ui-field" {...props} />;
+  return <select className="ui-field ui-select-field" {...props} />;
 }
 
 export function TextAreaField(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {

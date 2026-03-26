@@ -2,9 +2,12 @@ name: release-macos
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   package:
@@ -21,11 +24,24 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Validate release ref
+        run: |
+          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+            echo "This workflow must run on a version tag named v*." >&2
+            exit 1
+          fi
       - run: npm install
-      - name: Package unsigned or signed app
+      - name: Package macOS DMG
         run: npm run package:mac
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.dmg
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          prerelease: false
+          draft: false
       - uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: release/*
-
+          path: release/*.dmg

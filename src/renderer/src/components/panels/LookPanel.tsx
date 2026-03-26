@@ -18,7 +18,7 @@ export function LookPanel({
   onToggleBrowserFrame: (checked: boolean) => void;
 }) {
   return (
-    <Panel eyebrow="Presentation" title="Look" actions={<StatusBadge tone="neutral">mono-first</StatusBadge>}>
+    <Panel eyebrow="Presentation" title="Look" actions={<StatusBadge tone="neutral">Glass style</StatusBadge>}>
       <FieldShell label="Background preset">
         <SelectField value={background} onChange={(event) => onBackgroundChange(event.target.value as "slate" | "ocean" | "sunset")}>
           <option value="slate">Slate</option>

@@ -1,7 +1,8 @@
-import type { CaptureSource, ExportJob, ExportRequest, ProjectFileV1, SavedRecordingPayload, SystemInfo, TrayCommand } from "./types";
+import type { CaptureSource, ExportJob, ExportRequest, GlobalCursorState, ProjectFileV1, SavedRecordingPayload, SystemInfo, TrayCommand } from "./types";
 
 export const IPC_CHANNELS = {
   captureListSources: "capture:listSources",
+  captureGetCursorState: "capture:getCursorState",
   projectCreate: "project:create",
   projectOpen: "project:open",
   projectSave: "project:save",
@@ -17,6 +18,7 @@ export const IPC_CHANNELS = {
 export interface DesktopApi {
   capture: {
     listSources: () => Promise<CaptureSource[]>;
+    getCursorState: () => Promise<GlobalCursorState | null>;
   };
   project: {
     create: (name?: string) => Promise<ProjectFileV1>;

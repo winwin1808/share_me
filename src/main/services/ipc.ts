@@ -15,7 +15,7 @@ const renderAdapter = new FfmpegRenderAdapter();
 const codeSignConfig = new EnvironmentCodeSignConfigProvider();
 
 function recordingsDir(): string {
-  return path.join(app.getPath("videos"), "CursorfulDesktopMvp");
+  return path.join(app.getPath("videos"), "shareme");
 }
 
 async function saveRecording(payload: SavedRecordingPayload): Promise<RecordingSession> {
@@ -27,13 +27,14 @@ async function saveRecording(payload: SavedRecordingPayload): Promise<RecordingS
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.captureListSources, () => captureAdapter.listSources());
+  ipcMain.handle(IPC_CHANNELS.captureGetCursorState, () => captureAdapter.getCursorState());
   ipcMain.handle(IPC_CHANNELS.projectCreate, (_event, name?: string) => createProject(name));
   ipcMain.handle(IPC_CHANNELS.projectOpen, async () => {
     const result = await dialog.showOpenDialog({
       title: "Open project",
       defaultPath: projectsRootDir(),
       properties: ["openFile"],
-      filters: [{ name: "Cursorful Projects", extensions: ["json"] }]
+      filters: [{ name: "Shareme Projects", extensions: ["json"] }]
     });
     if (result.canceled || result.filePaths.length === 0) {
       return null;

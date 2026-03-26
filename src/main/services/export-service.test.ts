@@ -1,12 +1,13 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { spawnMock, showSaveDialogMock, getPathMock, sendMock, mkdirMock } = vi.hoisted(() => ({
+const { spawnMock, showSaveDialogMock, getPathMock, sendMock, mkdirMock, existsSyncMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   showSaveDialogMock: vi.fn(),
   getPathMock: vi.fn(),
   sendMock: vi.fn(),
-  mkdirMock: vi.fn()
+  mkdirMock: vi.fn(),
+  existsSyncMock: vi.fn()
 }));
 
 class MockChildProcess extends EventEmitter {
@@ -23,7 +24,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 vi.mock("ffmpeg-static", () => ({
-  default: "/usr/local/bin/ffmpeg"
+  default: "/Applications/Shareme.app/Contents/Resources/app.asar/node_modules/ffmpeg-static/ffmpeg"
 }));
 
 vi.mock("node:fs/promises", () => ({
@@ -33,13 +34,21 @@ vi.mock("node:fs/promises", () => ({
   mkdir: mkdirMock
 }));
 
+vi.mock("node:fs", () => ({
+  default: {
+    existsSync: existsSyncMock
+  },
+  existsSync: existsSyncMock
+}));
+
 vi.mock("electron", () => ({
   BrowserWindow: {
     getAllWindows: () => [{ webContents: { send: sendMock } }]
   },
   app: {
     getPath: getPathMock,
-    getVersion: () => "0.1.0"
+    getVersion: () => "0.1.0",
+    isPackaged: false
   },
   dialog: {
     showSaveDialog: showSaveDialogMock
@@ -58,8 +67,10 @@ describe("FfmpegRenderAdapter", () => {
     getPathMock.mockReset();
     sendMock.mockReset();
     mkdirMock.mockReset();
+    existsSyncMock.mockReset();
     getPathMock.mockReturnValue("/Users/test/Movies");
     mkdirMock.mockResolvedValue(undefined);
+    existsSyncMock.mockReturnValue(false);
   });
 
   it("builds a 16:9 export job with padding filter", async () => {
@@ -95,19 +106,23 @@ describe("FfmpegRenderAdapter", () => {
       },
       preset: {
         aspectRatio: "16:9",
-        outputName: "cursorful-export-16x9.mp4",
+        outputName: "Shareme-export-16x9.mp4",
         includeBrowserFrame: false,
         background: { mode: "preset", preset: "slate" }
       }
     });
 
     expect(job.status).toBe("running");
-    expect(spawnMock).toHaveBeenCalledWith("/usr/local/bin/ffmpeg", expect.any(Array));
+    expect(spawnMock).toHaveBeenCalledWith(
+      "/Applications/Shareme.app/Contents/Resources/app.asar/node_modules/ffmpeg-static/ffmpeg",
+      expect.any(Array)
+    );
     const args = spawnMock.mock.calls[0][1];
     expect(args).toEqual(expect.arrayContaining(["-i", "/Users/test/recording.webm", "-vf", expect.any(String)]));
     const filter = args[args.indexOf("-vf") + 1];
     expect(filter).toContain("crop=iw:ih-43:0:43");
-    expect(filter).toContain("if(between(t,0.000,1.400),1.800,1)");
+    expect(filter).toContain("pow");
+    expect(filter).toContain("(1.0000+((1.8000)-1.0000)*");
     expect(filter).toContain("pad=1920:1080:(ow-iw)/2:(oh-ih)/2:0x111823");
     expect(args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-pix_fmt", "yuv420p", "/Users/test/Movies/output.mp4"]));
 
@@ -141,7 +156,7 @@ describe("FfmpegRenderAdapter", () => {
       },
       preset: {
         aspectRatio: "9:16",
-        outputName: "cursorful-export-9x16.mp4",
+        outputName: "Shareme-export-9x16.mp4",
         includeBrowserFrame: false,
         background: { mode: "preset", preset: "ocean" }
       }
@@ -173,7 +188,7 @@ describe("FfmpegRenderAdapter", () => {
       },
       preset: {
         aspectRatio: "1:1",
-        outputName: "cursorful-export-1x1.mp4",
+        outputName: "Shareme-export-1x1.mp4",
         includeBrowserFrame: false,
         background: { mode: "preset", preset: "sunset" }
       }
@@ -202,7 +217,7 @@ describe("FfmpegRenderAdapter", () => {
         },
         preset: {
           aspectRatio: "16:9",
-          outputName: "cursorful-export-16x9.mp4",
+          outputName: "Shareme-export-16x9.mp4",
           includeBrowserFrame: false,
           background: { mode: "preset", preset: "slate" }
         }
@@ -250,14 +265,14 @@ describe("FfmpegRenderAdapter", () => {
       },
       preset: {
         aspectRatio: "1:1",
-        outputName: "cursorful-export-1x1.mp4",
+        outputName: "Shareme-export-1x1.mp4",
         includeBrowserFrame: false,
         background: { mode: "preset", preset: "sunset" }
       }
     });
 
     expect(spawnMock).toHaveBeenCalledWith(
-      "/usr/local/bin/ffmpeg",
+      "/Applications/Shareme.app/Contents/Resources/app.asar/node_modules/ffmpeg-static/ffmpeg",
       expect.arrayContaining(["-i", "/Users/test/override.webm"])
     );
   });
@@ -296,7 +311,7 @@ describe("FfmpegRenderAdapter", () => {
       },
       preset: {
         aspectRatio: "16:9",
-        outputName: "cursorful-export-16x9.mp4",
+        outputName: "Shareme-export-16x9.mp4",
         includeBrowserFrame: false,
         background: { mode: "custom", preset: "ocean", customImagePath: "/Users/test/bg.png" }
       }
@@ -351,7 +366,7 @@ describe("FfmpegRenderAdapter", () => {
       },
       preset: {
         aspectRatio: "9:16",
-        outputName: "cursorful-export-9x16.mp4",
+        outputName: "Shareme-export-9x16.mp4",
         includeBrowserFrame: false,
         background: { mode: "preset", preset: "slate" }
       }
@@ -360,5 +375,120 @@ describe("FfmpegRenderAdapter", () => {
     const args = spawnMock.mock.calls[0][1];
     const filter = args[args.indexOf("-vf") + 1];
     expect(filter).toContain("crop=512:432:128:72");
+  });
+
+  it("builds dynamic cursor-follow expressions for follow-cursor zoom segments", async () => {
+    const child = new MockChildProcess();
+    spawnMock.mockReturnValue(child);
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: "/Users/test/Movies/output.mp4" });
+
+    const adapter = new FfmpegRenderAdapter();
+    await adapter.start({
+      project: {
+        id: "project-1",
+        version: 1,
+        name: "Project",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        zoomSegments: [
+          {
+            id: "zoom-follow",
+            startMs: 0,
+            endMs: 1400,
+            targetX: 0.3,
+            targetY: 0.7,
+            scale: 1.8,
+            followCursor: true,
+            easing: "linear"
+          }
+        ],
+        cursorPath: [
+          { t: 0, x: 0.2, y: 0.3 },
+          { t: 700, x: 0.6, y: 0.5 },
+          { t: 1400, x: 0.8, y: 0.7 }
+        ],
+        exportPresets: [],
+        background: { mode: "preset", preset: "slate" },
+        includeBrowserFrame: false,
+        recording: {
+          id: "rec-1",
+          sourceId: "source-1",
+          sourceType: "window",
+          sourceName: "Chrome",
+          startedAt: "2024-01-01T00:00:00.000Z",
+          durationMs: 1400,
+          fps: 30,
+          width: 1280,
+          height: 720,
+          audioEnabled: false,
+          videoPath: "/Users/test/recording.webm"
+        }
+      },
+      preset: {
+        aspectRatio: "16:9",
+        outputName: "Shareme-export-16x9.mp4",
+        includeBrowserFrame: false,
+        background: { mode: "preset", preset: "slate" }
+      }
+    });
+
+    const args = spawnMock.mock.calls[0][1];
+    const filter = args[args.indexOf("-vf") + 1];
+    expect(filter).toContain("if(lte(t,0.000),0.2000");
+    expect(filter).toContain("if(between(t,0.000,0.700)");
+    expect(filter).toContain("((t-0.000)/0.700)");
+    expect(filter).toContain("if(between(t,0.700,1.400)");
+  });
+
+  it("uses the unpacked ffmpeg binary path in packaged apps", async () => {
+    const child = new MockChildProcess();
+    spawnMock.mockReturnValue(child);
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: "/Users/test/Movies/output.mp4" });
+    existsSyncMock.mockReturnValue(true);
+
+    const { app } = await import("electron");
+    (app as { isPackaged: boolean }).isPackaged = true;
+
+    const adapter = new FfmpegRenderAdapter();
+    await adapter.start({
+      project: {
+        id: "project-1",
+        version: 1,
+        name: "Project",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        zoomSegments: [],
+        cursorPath: [],
+        exportPresets: [],
+        background: { mode: "preset", preset: "slate" },
+        includeBrowserFrame: false,
+        recording: {
+          id: "rec-1",
+          sourceId: "source-1",
+          sourceType: "window",
+          sourceName: "Chrome",
+          startedAt: "2024-01-01T00:00:00.000Z",
+          durationMs: 1200,
+          fps: 30,
+          width: 1280,
+          height: 720,
+          audioEnabled: false,
+          videoPath: "/Users/test/recording.webm"
+        }
+      },
+      preset: {
+        aspectRatio: "16:9",
+        outputName: "Shareme-export-16x9.mp4",
+        includeBrowserFrame: false,
+        background: { mode: "preset", preset: "slate" }
+      }
+    });
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "/Applications/Shareme.app/Contents/Resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg",
+      expect.any(Array)
+    );
+
+    (app as { isPackaged: boolean }).isPackaged = false;
   });
 });

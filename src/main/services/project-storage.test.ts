@@ -41,7 +41,7 @@ describe("project storage", () => {
 
   it("builds default project paths under the documents workspace root", () => {
     expect(defaultProjectFilePath("project-1")).toBe(
-      "/Users/test/Documents/CursorfulDesktopMvp/projects/project-1.cursorful.json"
+      "/Users/test/Documents/shareme/projects/project-1.shareme.json"
     );
   });
 
@@ -54,14 +54,14 @@ describe("project storage", () => {
         createdAt: "2024-01-01T00:00:00.000Z",
         updatedAt: "2024-01-01T00:00:00.000Z",
         captureSetup: { frameAspectRatio: "16:9" },
-        storagePath: "/tmp/project.cursorful.json",
+        storagePath: "/tmp/project.shareme.json",
         zoomSegments: [],
         cursorPath: [],
         exportPresets: [],
         background: { mode: "preset", preset: "slate" },
         includeBrowserFrame: false
       })
-    ).toBe("/tmp/project.cursorful.json");
+    ).toBe("/tmp/project.shareme.json");
   });
 
   it("saves projects back to the chosen path and stamps the storage path", async () => {
@@ -82,15 +82,15 @@ describe("project storage", () => {
     const saved = await saveProject(project);
 
     expect(mkdirMock).toHaveBeenCalledWith(
-      "/Users/test/Documents/CursorfulDesktopMvp/projects",
+      "/Users/test/Documents/shareme/projects",
       expect.objectContaining({ recursive: true })
     );
     expect(writeFileMock).toHaveBeenCalledWith(
-      "/Users/test/Documents/CursorfulDesktopMvp/projects/project-1.cursorful.json",
-      expect.stringContaining('"storagePath": "/Users/test/Documents/CursorfulDesktopMvp/projects/project-1.cursorful.json"'),
+      "/Users/test/Documents/shareme/projects/project-1.shareme.json",
+      expect.stringContaining('"storagePath": "/Users/test/Documents/shareme/projects/project-1.shareme.json"'),
       "utf8"
     );
-    expect(saved.storagePath).toBe("/Users/test/Documents/CursorfulDesktopMvp/projects/project-1.cursorful.json");
+    expect(saved.storagePath).toBe("/Users/test/Documents/shareme/projects/project-1.shareme.json");
   });
 
   it("loads and normalizes project files from disk", async () => {
@@ -109,19 +109,23 @@ describe("project storage", () => {
       })
     );
 
-    const project = await loadProject("/tmp/project.cursorful.json");
+    const project = await loadProject("/tmp/project.shareme.json");
 
-    expect(readFileMock).toHaveBeenCalledWith("/tmp/project.cursorful.json", "utf8");
-    expect(project.storagePath).toBe("/tmp/project.cursorful.json");
+    expect(readFileMock).toHaveBeenCalledWith("/tmp/project.shareme.json", "utf8");
+    expect(project.storagePath).toBe("/tmp/project.shareme.json");
     expect(project.id).toBe("project-1");
-    expect(project.captureSetup).toEqual({ frameAspectRatio: "9:16", cropRegion: { x: 0.1, y: 0.2, width: 0.7, height: 0.6 } });
+    expect(project.captureSetup).toEqual({
+      frameAspectRatio: "9:16",
+      cropRegion: { x: 0.1, y: 0.2, width: 0.7, height: 0.6 },
+      autoZoomOnClickWhileRecording: false
+    });
   });
 
   it("rejects invalid project JSON with a helpful message", async () => {
     readFileMock.mockResolvedValue("{not json");
 
-    await expect(loadProject("/tmp/broken.cursorful.json")).rejects.toThrow(
-      "Invalid project file /tmp/broken.cursorful.json:"
+    await expect(loadProject("/tmp/broken.shareme.json")).rejects.toThrow(
+      "Invalid project file /tmp/broken.shareme.json:"
     );
   });
 });

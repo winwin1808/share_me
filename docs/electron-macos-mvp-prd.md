@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Build a macOS-first Electron app inspired by Cursorful for browser-based screen recording with automatic zoom and pan, editable zoom timelines, offline local export, and local project file storage.
+Build a macOS-first Electron app for browser-based screen recording with automatic zoom and pan, editable zoom timelines, offline local export, and local project file storage under the Shareme brand.
 
 This document defines the implementation-ready requirements for the MVP. It is intentionally scoped to deliver a shippable local app first, while reserving a clean path for future code signing and notarization.
 
@@ -255,4 +255,3 @@ The app needs a separate component system that can be reused across editor, insp
 - Project persistence should remain local-first even if cloud storage is added later.
 - UI components should use a restrained monochrome base with theme tokens providing semantic diversity.
 - Any future component library should preserve the same state model and visual rules across the app.
-

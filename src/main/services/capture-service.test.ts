@@ -8,6 +8,13 @@ vi.mock("electron", () => ({
   desktopCapturer: {
     getSources: getSourcesMock
   },
+  screen: {
+    getCursorScreenPoint: vi.fn(() => ({ x: 240, y: 180 })),
+    getDisplayNearestPoint: vi.fn(() => ({
+      id: 7,
+      bounds: { x: 0, y: 0, width: 1440, height: 900 }
+    }))
+  },
   nativeImage: {}
 }));
 
@@ -22,7 +29,7 @@ describe("ElectronDesktopCaptureAdapter", () => {
     getSourcesMock.mockResolvedValue([
       {
         id: "1",
-        name: "Chrome - Cursorful",
+        name: "Chrome - Shareme",
         display_id: "display-1",
         thumbnail: { isEmpty: () => false, toDataURL: () => "data:image/png;base64,thumb1" }
       },
@@ -52,7 +59,7 @@ describe("ElectronDesktopCaptureAdapter", () => {
     expect(sources).toEqual([
       {
         id: "1",
-        name: "Chrome - Cursorful",
+        name: "Chrome - Shareme",
         sourceType: "window",
         displayId: "display-1",
         thumbnailDataUrl: "data:image/png;base64,thumb1"
@@ -79,5 +86,15 @@ describe("ElectronDesktopCaptureAdapter", () => {
         thumbnailDataUrl: "data:image/png;base64,thumb4"
       }
     ]);
+  });
+
+  it("returns the current global cursor state", async () => {
+    const adapter = new ElectronDesktopCaptureAdapter();
+    await expect(adapter.getCursorState()).resolves.toEqual({
+      x: 240,
+      y: 180,
+      displayId: "7",
+      displayBounds: { x: 0, y: 0, width: 1440, height: 900 }
+    });
   });
 });

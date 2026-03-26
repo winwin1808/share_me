@@ -1,4 +1,4 @@
-# Cursorful Desktop Component System
+# Shareme Component System
 
 ## 1. Goal
 

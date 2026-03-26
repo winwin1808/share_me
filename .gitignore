@@ -5,6 +5,9 @@ release
 artifacts
 coverage
 .DS_Store
+**/.DS_Store
 *.log
 *.tsbuildinfo
-
+20??-??-??_*.png
+docs/shareme-readme.vi.html
+docs/shareme-readme.vi.pdf

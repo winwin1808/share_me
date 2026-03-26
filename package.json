@@ -1,8 +1,8 @@
 {
-  "name": "cursorful-electron-mvp",
+  "name": "shareme-electron-mvp",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron MVP for browser-first screen recording with editable zooms and offline export.",
+  "description": "Shareme is an Electron MVP for browser-first screen recording with editable zooms and offline export.",
   "main": "dist-electron/main/main.js",
   "author": "bssgroup",
   "license": "MIT",
@@ -22,18 +22,21 @@
     "package:dir": "npm run build && electron-builder --dir --publish never"
   },
   "build": {
-    "appId": "com.bssgroup.cursorful.mvp",
-    "productName": "Cursorful Desktop MVP",
+    "appId": "com.bssgroup.shareme.mvp",
+    "productName": "Shareme",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**",
       "dist-electron/**",
+      "build/**",
+      "logo.png",
       "package.json"
     ],
     "asar": true,
     "mac": {
+      "icon": "build/icon.png",
       "category": "public.app-category.video",
       "target": [
         "dmg",

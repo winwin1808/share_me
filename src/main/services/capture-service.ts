@@ -1,5 +1,5 @@
-import { desktopCapturer } from "electron";
-import type { CaptureSource } from "../../shared/types";
+import { desktopCapturer, screen } from "electron";
+import type { CaptureSource, GlobalCursorState } from "../../shared/types";
 
 function inferSourceType(id: string, name: string): CaptureSource["sourceType"] {
   if (/tab/i.test(name)) {
@@ -16,6 +16,7 @@ function inferSourceType(id: string, name: string): CaptureSource["sourceType"] 
 
 export interface CaptureAdapter {
   listSources(): Promise<CaptureSource[]>;
+  getCursorState(): Promise<GlobalCursorState | null>;
 }
 
 function formatCaptureError(error: unknown): Error {
@@ -48,6 +49,29 @@ export class ElectronDesktopCaptureAdapter implements CaptureAdapter {
       }));
     } catch (error) {
       throw formatCaptureError(error);
+    }
+  }
+
+  async getCursorState(): Promise<GlobalCursorState | null> {
+    try {
+      const point = screen.getCursorScreenPoint();
+      const display = screen.getDisplayNearestPoint(point);
+      if (!display) {
+        return null;
+      }
+      return {
+        x: point.x,
+        y: point.y,
+        displayId: String(display.id),
+        displayBounds: {
+          x: display.bounds.x,
+          y: display.bounds.y,
+          width: display.bounds.width,
+          height: display.bounds.height
+        }
+      };
+    } catch {
+      return null;
     }
   }
 

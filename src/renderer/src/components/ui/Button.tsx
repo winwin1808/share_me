@@ -12,7 +12,7 @@ export function Button({ variant = "soft", leading, iconOnly = false, className 
   return (
     <button className={`ui-button ui-button-${variant} ${iconOnly ? "ui-button-icon" : ""} ${className}`.trim()} {...props}>
       {leading && <span className="ui-button-leading">{leading}</span>}
-      {children ? <span>{children}</span> : null}
+      {children ? <span className="ui-button-label">{children}</span> : null}
     </button>
   );
 }

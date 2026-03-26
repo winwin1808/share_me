@@ -10,19 +10,19 @@ import type {
 export const DEFAULT_EXPORT_PRESETS: ExportPreset[] = [
   {
     aspectRatio: "16:9",
-    outputName: "cursorful-export-16x9.mp4",
+    outputName: "Shareme-export-16x9.mp4",
     includeBrowserFrame: false,
     background: { mode: "preset", preset: "slate" }
   },
   {
     aspectRatio: "9:16",
-    outputName: "cursorful-export-9x16.mp4",
+    outputName: "Shareme-export-9x16.mp4",
     includeBrowserFrame: false,
     background: { mode: "preset", preset: "ocean" }
   },
   {
     aspectRatio: "1:1",
-    outputName: "cursorful-export-1x1.mp4",
+    outputName: "Shareme-export-1x1.mp4",
     includeBrowserFrame: false,
     background: { mode: "preset", preset: "sunset" }
   }
@@ -38,7 +38,8 @@ export function createProject(name = "Untitled Project"): ProjectFileV1 {
     updatedAt: now,
     storagePath: undefined,
     captureSetup: {
-      frameAspectRatio: "16:9"
+      frameAspectRatio: "16:9",
+      autoZoomOnClickWhileRecording: false
     },
     zoomSegments: [],
     cursorPath: [],
@@ -53,7 +54,7 @@ export function ensureProjectShape(project: ProjectFileV1): ProjectFileV1 {
     ...project,
     version: 1,
     storagePath: project.storagePath,
-    captureSetup: normalizeCaptureSetup(project.captureSetup) ?? { frameAspectRatio: "16:9" },
+    captureSetup: normalizeCaptureSetup(project.captureSetup) ?? { frameAspectRatio: "16:9", autoZoomOnClickWhileRecording: false },
     zoomSegments: project.zoomSegments ?? [],
     cursorPath: project.cursorPath ?? [],
     exportPresets: project.exportPresets?.length ? project.exportPresets : DEFAULT_EXPORT_PRESETS,
@@ -111,7 +112,8 @@ function normalizeCaptureSetup(value: unknown): CaptureSetup | undefined {
       : undefined;
 
   const captureSetup: CaptureSetup = {
-    frameAspectRatio: normalizeFrameAspectRatio(value.frameAspectRatio)
+    frameAspectRatio: normalizeFrameAspectRatio(value.frameAspectRatio),
+    autoZoomOnClickWhileRecording: false
   };
   if (typeof value.sourceId === "string" && value.sourceId) {
     captureSetup.sourceId = value.sourceId;
@@ -125,6 +127,9 @@ function normalizeCaptureSetup(value: unknown): CaptureSetup | undefined {
   }
   if (cropRegion) {
     captureSetup.cropRegion = cropRegion;
+  }
+  if (typeof value.autoZoomOnClickWhileRecording === "boolean") {
+    captureSetup.autoZoomOnClickWhileRecording = value.autoZoomOnClickWhileRecording;
   }
   return captureSetup;
 }

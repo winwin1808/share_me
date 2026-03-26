@@ -1,6 +1,6 @@
 export type CaptureSourceType = "tab" | "window" | "screen";
 export type FrameAspectRatio = "native" | "16:9" | "9:16" | "1:1";
-export type ExportAspectRatio = Exclude<FrameAspectRatio, "native">;
+export type ExportAspectRatio = FrameAspectRatio;
 export type ZoomEasing = "easeInOut" | "easeOut" | "linear";
 export type ExportJobStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
 export type CapturePermissionStatus = "unknown" | "granted" | "denied" | "restricted";
@@ -25,6 +25,7 @@ export interface CaptureSetup {
   sourceName?: string;
   frameAspectRatio: FrameAspectRatio;
   cropRegion?: CaptureCropRegion;
+  autoZoomOnClickWhileRecording?: boolean;
 }
 
 export interface CaptureSource {
@@ -72,6 +73,20 @@ export interface CursorPoint {
   t: number;
   x: number;
   y: number;
+}
+
+export interface CursorDisplayBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface GlobalCursorState {
+  x: number;
+  y: number;
+  displayId?: string;
+  displayBounds: CursorDisplayBounds;
 }
 
 export interface BackgroundConfig {
