@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to package and publish, for example v0.1.0"
+        required: true
 
 permissions:
   contents: write
@@ -20,22 +24,41 @@ jobs:
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - name: Validate release ref
+      - name: Resolve release tag
+        id: release_tag
         run: |
-          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
-            echo "This workflow must run on a version tag named v*." >&2
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_tag="${{ inputs.tag }}"
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ "${release_tag}" != v* ]]; then
+            echo "Release tag must match v*." >&2
             exit 1
           fi
+
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
       - run: npm install
       - name: Package macOS DMG
-        run: npm run package:mac
+        run: |
+          for var in APPLE_ID APPLE_APP_PASSWORD APPLE_TEAM_ID CSC_LINK CSC_KEY_PASSWORD; do
+            if [[ -z "${!var:-}" ]]; then
+              unset "${var}"
+            fi
+          done
+
+          npm run package:mac
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_tag.outputs.release_tag }}
           files: release/*.dmg
           generate_release_notes: true
           fail_on_unmatched_files: true
