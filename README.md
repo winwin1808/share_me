@@ -11,9 +11,9 @@ Shareme is a macOS-first Electron app for browser and window recording with edit
 Each release attaches:
 
 - a macOS `.dmg`
-- a Windows `.exe`
+- a Windows `x64 .exe`
 
-Both assets are built from a version tag such as `v0.1.1`.
+Both assets are built from a version tag such as `v0.1.2`.
 
 ## What it does
 
@@ -29,7 +29,7 @@ Both assets are built from a version tag such as `v0.1.1`.
 2. Commit the changes to `main`.
 3. Create a tag such as `v0.1.0`.
 4. Push the commit and tag.
-5. GitHub Actions builds the macOS `.dmg` and Windows `.exe`, then publishes both to GitHub Releases.
+5. GitHub Actions builds the macOS `.dmg` and Windows `x64 .exe`, then publishes both to GitHub Releases.
 
 ## Local development
 
